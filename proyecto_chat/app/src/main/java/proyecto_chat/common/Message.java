@@ -3,6 +3,7 @@ package proyecto_chat.common;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.UUID;
+import java.nio.charset.StandardCharsets;
 
 public class Message implements Serializable {
     public enum MessageType {
@@ -10,7 +11,6 @@ public class Message implements Serializable {
         VOICE_NOTE,
         CREATE_GROUP,
         JOIN_GROUP,
-        // Señalización para llamadas
         CALL_START,
         CALL_ACCEPT,
         CALL_REJECT,
@@ -25,13 +25,13 @@ public class Message implements Serializable {
     private final String fileName;
     private final long timestamp;
 
-    // Texto
+    // Texto (UTF-8)
     public Message(MessageType type, String sender, String recipient, String textContent) {
         this.type = type;
         this.id = UUID.randomUUID().toString();
         this.sender = sender;
         this.recipient = recipient;
-        this.content = textContent != null ? textContent.getBytes() : new byte[0];
+        this.content = textContent != null ? textContent.getBytes(StandardCharsets.UTF_8) : new byte[0];
         this.fileName = null;
         this.timestamp = Instant.now().toEpochMilli();
     }
@@ -47,7 +47,7 @@ public class Message implements Serializable {
         this.timestamp = Instant.now().toEpochMilli();
     }
 
-    // Constructor genérico (por si necesitas)
+    // Constructor genérico
     public Message(MessageType type, String id, String sender, String recipient, byte[] content, String fileName, long timestamp) {
         this.type = type;
         this.id = id;
@@ -58,7 +58,6 @@ public class Message implements Serializable {
         this.timestamp = timestamp;
     }
 
-    // Getters
     public MessageType getType() { return type; }
     public String getId() { return id; }
     public String getSender() { return sender; }
@@ -68,6 +67,6 @@ public class Message implements Serializable {
     public long getTimestamp() { return timestamp; }
 
     public String getTextContent() {
-        return new String(this.content);
+        return new String(this.content, StandardCharsets.UTF_8);
     }
 }
