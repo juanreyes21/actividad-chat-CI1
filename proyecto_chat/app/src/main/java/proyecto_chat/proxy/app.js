@@ -7,7 +7,8 @@ const PROXY_PORT = 10001; // donde escucha ProxyListener en Java
 const HTTP_PORT = 3000;
 
 const app = express();
-app.use(bodyParser.json());
+// Aumentar límite para cargas de audio en base64
+app.use(bodyParser.json({ limit: '30mb' }));
 
 // helper: request sync-like via socket (envía JSON, espera 1 línea JSON respuesta)
 function sendToJavaProxy(obj) {
@@ -66,6 +67,40 @@ app.post('/api/messages', async (req, res) => {
     const r = await sendToJavaProxy({ action: 'send_text', username, recipient, text });
     res.json(r);
   } catch (err) { res.status(500).json({ status: 'error', message: err.message }); }
+});
+
+// Endpoint para notas de voz desde el cliente web. Envía base64 -> ProxyListener Java
+app.post('/api/voicenote', async (req, res) => {
+  const { username, recipient, fileName, content } = req.body;
+  if (!username || !recipient || !fileName || !content) return res.status(400).json({ status:'error', message:'missing fields' });
+  try {
+    const r = await sendToJavaProxy({ action: 'send_voice', username, recipient, fileName, content });
+    res.json(r);
+  } catch (err) {
+    res.status(500).json({ status:'error', message: err.message });
+  }
+});
+
+// Admin: backfill visibility for voice notes
+app.post('/api/admin/backfill', async (req, res) => {
+  try {
+    const r = await sendToJavaProxy({ action: 'backfill_visibility' });
+    res.json(r);
+  } catch (err) {
+    res.status(500).json({ status:'error', message: err.message });
+  }
+});
+
+// Endpoint para obtener audio guardado en el servidor (por nombre de archivo)
+app.get('/api/audio', async (req, res) => {
+  const file = req.query.file;
+  if (!file) return res.status(400).json({ status:'error', message:'file required' });
+  try {
+    const r = await sendToJavaProxy({ action: 'fetch_audio', file });
+    res.json(r);
+  } catch (err) {
+    res.status(500).json({ status:'error', message: err.message });
+  }
 });
 
 app.delete('/api/messages', async (req, res) => {

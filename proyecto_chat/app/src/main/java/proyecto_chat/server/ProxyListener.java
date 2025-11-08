@@ -93,6 +93,23 @@ public class ProxyListener implements Runnable {
                 return new JSONObject().put("status","ok");
             }
 
+            case "send_voice": {
+                String sender = req.optString("username", null);
+                String recipient = req.optString("recipient", null);
+                String fileName = req.optString("fileName", null);
+                String contentB64 = req.optString("content", null);
+                if (sender == null || recipient == null || fileName == null || contentB64 == null) {
+                    return new JSONObject().put("status","error").put("message","username, recipient, fileName and content required");
+                }
+                try {
+                    byte[] content = java.util.Base64.getDecoder().decode(contentB64);
+                    server.handleProxySendVoice(sender, recipient, content, fileName);
+                    return new JSONObject().put("status","ok");
+                } catch (IllegalArgumentException iae) {
+                    return new JSONObject().put("status","error").put("message","invalid base64");
+                }
+            }
+
             case "delete_chat": {
                 String sender = req.optString("username", null);
                 String recipient = req.optString("recipient", null);
@@ -125,6 +142,31 @@ public class ProxyListener implements Runnable {
                     }
                 } catch (Exception e) { e.printStackTrace(); }
                 return new JSONObject().put("status","ok").put("messages", arr);
+            }
+
+            case "fetch_audio": {
+                String file = req.optString("file", null);
+                if (file == null) return new JSONObject().put("status","error").put("message","file required");
+                try {
+                    String b64 = server.fetchAudioBase64(file);
+                    if (b64 == null) return new JSONObject().put("status","error").put("message","file not found");
+                    JSONObject out = new JSONObject();
+                    out.put("status","ok");
+                    out.put("content", b64);
+                    out.put("mime", "audio/wav");
+                    return out;
+                } catch (Exception e) {
+                    return new JSONObject().put("status","error").put("message", e.getMessage());
+                }
+            }
+
+            case "backfill_visibility": {
+                try {
+                    server.backfillVoiceNoteVisibility();
+                    return new JSONObject().put("status","ok").put("message","backfill executed");
+                } catch (Exception e) {
+                    return new JSONObject().put("status","error").put("message", e.getMessage());
+                }
             }
 
             case "list_groups": {

@@ -112,6 +112,30 @@ public class Client {
                                 }
                             }
                             break;
+                        case "record":
+                            // record@dest@seconds  -> graba desde micrófono y envía como VOICE_NOTE
+                            if (parts.length == 3) {
+                                String dest = parts[1];
+                                try {
+                                    int seconds = Integer.parseInt(parts[2]);
+                                    if (seconds <= 0) {
+                                        System.out.println("Duración inválida. Debe ser > 0.");
+                                        break;
+                                    }
+                                    System.out.println("Grabando " + seconds + "s...");
+                                    java.io.File wav = AudioRecorder.recordWav(seconds);
+                                    byte[] fileContent = Files.readAllBytes(wav.toPath());
+                                    msg = new Message(Message.MessageType.VOICE_NOTE, username, dest, fileContent, wav.getName());
+                                    System.out.println("Nota de voz grabada: " + wav.getName());
+                                } catch (NumberFormatException nfe) {
+                                    System.out.println("Segundos inválidos. Uso: record@dest@seconds");
+                                } catch (Exception e) {
+                                    System.out.println("Error al grabar/enviar nota de voz: " + e.getMessage());
+                                }
+                            } else {
+                                System.out.println("Uso: record@dest@seconds");
+                            }
+                            break;
                         case "creategroup":
                             msg = new Message(Message.MessageType.CREATE_GROUP, username, "server", content);
                             break;

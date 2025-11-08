@@ -1,6 +1,6 @@
-# Chat de Consola con Llamadas (TCP/UDP)
+# Chat Cliente-Servidor con Proxy HTTP
 
-Proyecto Java que cumple el entregable: grupos, texto 1:1 y a grupos, notas de voz, llamadas 1:1 y a grupos, e historial (texto y audios) persistente.
+Proyecto que implementa un sistema de chat con cliente web y cliente Java, comunicándose a través de un proxy HTTP hacia un backend Java. Soporta mensajes de texto, grupos y notas de voz, con historial persistente.
 
 ## Integrantes
 
@@ -8,148 +8,143 @@ Proyecto Java que cumple el entregable: grupos, texto 1:1 y a grupos, notas de v
 * Ismael Barrionuevo
 * Sebastián Castillo
 
-
-
-## Cómo ejecutar
-
-Windows PowerShell (usar .\gradlew.bat). Linux/macOS (usar ./gradlew).
-
-1. servidor
+## Arquitectura del Sistema
 
 ```
-.\gradlew.bat -x test runServer
+[Cliente Web] ←→ [Proxy HTTP] ←→ [Servidor Java]
+    (HTTP)         (TCP)         (Persistencia)
 ```
 
-aparece: “Servidor de chat iniciado en el puerto 9090” y “CallRelay UDP escuchando en puerto 10000”.
+- **Cliente Web**: Interfaz HTML5/JS con soporte para texto y notas de voz
+- **Proxy HTTP**: Node.js/Express, traduce HTTP a mensajes TCP
+- **Servidor Java**: Gestión de mensajes y persistencia SQLite
 
-2. clientes (cada uno en una ventana nueva)
+## Configuración y Ejecución
 
+El sistema requiere tres componentes:
+
+### 1. Servidor Java
+```powershell
+# Desde la carpeta proyecto_chat
+.\gradlew.bat run
 ```
-.\gradlew.bat -x test runClient
+Inicia en:
+- Puerto TCP 9090 (mensajería)
+- Puerto TCP 10001 (proxy)
+
+### 2. Proxy HTTP Node.js
+```powershell
+# Desde proyecto_chat/app/src/main/java/proyecto_chat/proxy
+npm install
+node app.js
 ```
+El proxy escucha en http://localhost:3000
 
-cuando pida el usuario, escribir por ejemplo:
+### 3. Acceso al Cliente Web
+1. Abre http://localhost:3000 en el navegador
+2. Ingresa tu nombre de usuario
+3. ¡Listo para chatear!
 
-```
-a
-```
-
-repetir en otra ventana para b (y opcionalmente c).
-
-Notas
-
-* si prefieres tarea genérica run: el build ya define main en proyecto_chat.App. puedes añadir standardInput = System.in a la tarea run si necesitas leer teclado desde run.
-
-## Comandos en el cliente
-
-texto 1:1
-
-```
-destinatario@mensaje
-```
-
-texto a grupo
-
-```
-grupo@mensaje
-```
-
-crear/unirse a grupo
-
-```
-creategroup@nombre
-joingroup@nombre
+### 4. Cliente Java (opcional)
+```powershell
+# Nueva ventana, desde proyecto_chat
+.\gradlew.bat runClient
 ```
 
-nota de voz a usuario o grupo (ruta a .wav local)
+Nota: En Linux/macOS usar `./gradlew` en lugar de `.\gradlew.bat`
+
+## Funcionalidades Implementadas
+
+### Cliente Web (Nuevo)
+-  Interfaz web responsive
+-  Envío y recepción de mensajes de texto
+-  Creación y gestión de grupos
+-  Grabación y envío de notas de voz
+-  Reproducción de notas de voz
+-  Historial de mensajes
+
+### Cliente Java (Original)
+-  Mensajes de texto 1:1 y grupos
+-  Envío de archivos de audio
+-  Gestión de grupos
+-  Comandos disponibles:
+  ```
+  destinatario@mensaje         # Mensaje directo
+  grupo@mensaje               # Mensaje a grupo
+  creategroup@nombre          # Crear grupo
+  joingroup@nombre           # Unirse a grupo
+  voicenote@dest@archivo.wav # Enviar nota de voz
+  ```
+
+## Estructura del Proyecto
 
 ```
-voicenote@destinatario@archivo.wav
-voicenote@grupo@archivo.wav
+proyecto_chat/
+├── app/
+│   ├── src/main/java/proyecto_chat/
+│   │   ├── client/
+│   │   │   ├── js/           # Cliente web
+│   │   │   │   ├── chat.js
+│   │   │   │   └── ...
+│   │   │   └── *.java       # Cliente consola
+│   │   ├── proxy/           # Servidor HTTP
+│   │   │   ├── app.js
+│   │   │   └── package.json
+│   │   └── server/          # Backend
+│   └── storage/
+│       ├── chat_history.db  # Base de datos
+│       └── audio/          # Notas de voz
 ```
 
-llamada 1:1
+## API HTTP (Proxy)
 
-```
-call@usuario
-callaccept@usuario
-hangup@usuario
-```
-
-llamada a grupo
-
-```
-call@grupo
-callaccept@grupo
-hangup@grupo
-```
-
-## Flujo de prueba recomendado
-
-texto 1:1
-
-1. en a: `b@hola b`  → b ve el mensaje
-
-grupo
-
-1. en a: `creategroup@equipo`
-2. en b: `joingroup@equipo` (y c igual)
-3. en a: `equipo@hola equipo`  → b y c reciben
-
-llamada 1:1
-
-1. en a: `call@b`  → b verá el aviso para aceptar
-2. en b: `callaccept@a`  → ambos conectan audio
-3. colgar: `hangup@a` o `hangup@b`
-
-llamada a grupo
-
-1. en a: `call@equipo`
-2. en b: `callaccept@equipo` y en c: `callaccept@equipo`
-3. cada miembro que cuelgue: `hangup@equipo`
-
-## Decisiones de diseño
-
-* TCP para control, texto y notas de voz (fiabilidad/orden)
-* UDP para audio en tiempo real (baja latencia)
-* callId único generado por el caller en CALL_START y reutilizado por todos en CALL_ACCEPT
-* historial en SQLite (storage/chat_history.db) y audios en storage/audio
+### Endpoints Principales
+- `POST /api/messages` - Enviar mensaje de texto
+- `POST /api/groups` - Crear grupo
+- `POST /api/groups/join` - Unirse a grupo
+- `POST /api/voicenote` - Enviar nota de voz
+- `GET /api/audio` - Obtener archivo de audio
 
 ## Persistencia
 
-tabla messages (SQLite)
+### Base de Datos (SQLite)
+```sql
+CREATE TABLE messages (
+    id TEXT PRIMARY KEY,
+    type TEXT,           -- TEXT | VOICE_NOTE
+    sender TEXT,
+    recipient TEXT,
+    is_group INTEGER,    -- 0=directo, 1=grupo
+    text_content TEXT,   -- contenido UTF-8
+    file_path TEXT,      -- ruta del archivo .wav
+    timestamp INTEGER    -- epoch ms
+);
 
-* id TEXT (PK)
-* type TEXT [TEXT|VOICE_NOTE]
-* sender TEXT
-* recipient TEXT
-* text_content TEXT (UTF-8)
-* file_path TEXT (ruta absoluta del .wav, si aplica)
-* timestamp INTEGER (epoch ms)
+-- Visibilidad de mensajes
+CREATE TABLE message_visibility (
+    message_id TEXT,
+    username TEXT,
+    visible INTEGER DEFAULT 1,
+    PRIMARY KEY(message_id, username)
+);
+```
 
-rutas
+## Decisiones de Diseño
 
-* base de datos: storage/chat_history.db
-* audios: storage/audio/
+1. **Arquitectura**
+   - Proxy HTTP como puente entre web y Java
+   - Traducción de peticiones HTTP a mensajes TCP
+   - Mantenimiento de la lógica del servidor original
 
-## Estructura principal
+2. **Almacenamiento**
+   - SQLite para persistencia de mensajes
+   - Sistema de archivos para notas de voz
+   - Control de visibilidad por usuario
 
-* proyecto_chat.App (entrypoint)
-* client
-
-  * Client (CLI)
-  * AudioSender (captura micrófono → UDP)
-  * AudioReceiver (UDP → altavoces)
-* common
-
-  * Message (UTF-8)
-* server
-
-  * Server (TCP)
-  * ClientHandler (ruteo a usuarios/grupos y señalización)
-  * CallRelay (relay UDP con registro, BYE y broadcast)
-  * HistoryManager (SQLite + archivos)
-
+3. **Cliente Web**
+   - API MediaRecorder para grabación
+   - Conversión a WAV en el navegador
+   - UI responsive y amigable
 
 
 

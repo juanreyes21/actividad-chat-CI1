@@ -110,10 +110,25 @@ public class ClientHandler implements Runnable {
                             message.getFileName(), 
                             message.getTimestamp()
                         );
-                        
-                        ClientHandler voiceHandler = clients.get(recipientVoice.toLowerCase());
-                        if (voiceHandler != null) {
-                            voiceHandler.sendMessage(message);
+
+                        // Enviar la nota de voz a los miembros apropiados.
+                        // Si es un grupo, enviarla a todos los miembros excepto el remitente.
+                        // Si es un chat directo, enviarla al destinatario.
+                        boolean isGroupVoice = groups.containsKey(recipientVoice);
+                        if (isGroupVoice) {
+                            for (String member : groups.get(recipientVoice)) {
+                                if (!member.equalsIgnoreCase(this.username)) {
+                                    ClientHandler handler = clients.get(member.toLowerCase());
+                                    if (handler != null) {
+                                        handler.sendMessage(message);
+                                    }
+                                }
+                            }
+                        } else {
+                            ClientHandler voiceHandler = clients.get(recipientVoice.toLowerCase());
+                            if (voiceHandler != null) {
+                                voiceHandler.sendMessage(message);
+                            }
                         }
                         break;
 

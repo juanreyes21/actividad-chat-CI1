@@ -201,6 +201,56 @@ public class Server implements Runnable {
         */
     }
 
+    public void handleProxySendVoice(String sender, String recipient, byte[] content, String originalFileName) {
+        registerUserIfNotExists(sender);
+        if (!groups.containsKey(recipient)) {
+            registerUserIfNotExists(recipient);
+        }
+
+        boolean isGroup = groups.containsKey(recipient);
+        String msgId = UUID.randomUUID().toString();
+        long ts = System.currentTimeMillis();
+
+        // Guardar en storage + DB
+        historyManager.saveVoiceNoteToDiskAndDb(msgId, sender, recipient, content, originalFileName, ts);
+
+        proyecto_chat.common.Message msg = new proyecto_chat.common.Message(
+            proyecto_chat.common.Message.MessageType.VOICE_NOTE, sender, recipient, content, originalFileName
+        );
+
+        if (isGroup) {
+            for (String member : groups.get(recipient)) {
+                if (!member.equalsIgnoreCase(sender) && clients.containsKey(member)) {
+                    clients.get(member).sendMessage(msg);
+                }
+            }
+        } else if (clients.containsKey(recipient.toLowerCase())) {
+            clients.get(recipient.toLowerCase()).sendMessage(msg);
+        }
+    }
+
+    // Devuelve base64 del archivo de audio guardado (por nombre de archivo en storage/audio)
+    public String fetchAudioBase64(String fileName) {
+        try {
+            return historyManager.getAudioFileBase64(fileName);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public void backfillVoiceNoteVisibility() {
+        try {
+            if (historyManager != null) {
+                historyManager.backfillVoiceNoteVisibility();
+                // Normalizar file_path de voice notes antiguas (ruta -> basename)
+                historyManager.normalizeVoiceNoteFilePaths();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     public java.sql.ResultSet fetchHistoryForRecipient(String username, String chatTarget) throws java.sql.SQLException {
         return this.historyManager.fetchHistory(username, chatTarget);
     }
