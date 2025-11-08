@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Chat Web</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- LOGIN SCREEN -->
+    <div id="loginScreen" class="center-screen">
+        <div class="login-box">
+            <h2>Iniciar sesión</h2>
+            <input id="loginUser" placeholder="Tu nombre..." autocomplete="off">
+            <button id="loginBtn">Entrar</button>
+        </div>
+    </div>
+
+    <!-- APP -->
+    <div id="chatApp" class="layout" style="display:none;">
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+
+            <div class="welcome">
+                Bienvenido, <strong id="welcomeUser"></strong>
+            </div>
+
+            <h3><strong>Oprime un chat para enviar un mensaje</strong></h3>
+            <ul id="userList" class="user-list"></ul>
+
+            <h3>Grupos</h3>
+            <ul id="groupList" class="user-list"></ul>
+            <br>
+            <button id="createGroupBtn">Nuevo grupo</button>
+
+            <button id="joinGroupBtn">Unirme a un grupo</button>
+
+            <button id="deleteChatBtn" class="danger">Borrar chat</button>
+            
+            <br>
+            <button id="logoutBtn" class="logout">Cerrar sesión</button>
+
+        </aside>
+
+        <!-- CHAT PANEL -->
+        <main class="chat-area">
+            <div class="chat-header">
+                <span id="activeChatName">Selecciona un chat</span>
+            </div>
+
+            <div id="messages" class="messages"></div>
+
+            <div class="send-box">
+                <input id="text" placeholder="Escribe un mensaje..." disabled>
+                <button id="send" disabled>Enviar</button>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/chat.js"></script>
+
+</body>
+
+</html>
