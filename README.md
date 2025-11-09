@@ -147,17 +147,54 @@ Audios:
 proyecto_chat/app/storage/audio/
 ```
 
-Tabla principal `messages`:
 
-| Campo | Descripción |
-|--------|------------|
-| id | identificador del mensaje |
-| type | TEXT o VOICE_NOTE |
-| sender | emisor |
-| recipient | usuario o grupo |
-| text_content | mensaje (si aplica) |
-| file_path | ruta del audio (si aplica) |
-| timestamp | epoch ms |
+### Tablas del sistema
+
+#### Tabla: `messages`
+Guarda el historial de mensajes (texto y notas de voz).
+
+| Campo        | Tipo      | Descripción |
+|--------------|-----------|-------------|
+| id           | TEXT (PK) | Identificador único del mensaje |
+| type         | TEXT      | TEXT o VOICE_NOTE |
+| sender       | TEXT      | Usuario que envía |
+| recipient    | TEXT      | Usuario o grupo destino |
+| text_content | TEXT      | Contenido del mensaje si aplica |
+| file_path    | TEXT      | Ruta al archivo .wav (notas de voz) |
+| timestamp    | INTEGER   | Epoch ms |
+
+---
+
+#### Tabla: `user`
+Representa un usuario registrado en el sistema.
+
+| Campo        | Tipo      | Descripción |
+|--------------|-----------|-------------|
+| username     | TEXT (PK) | Identificador del usuario |
+| created_at   | INTEGER   | Fecha de creación (epoch ms) |
+
+---
+
+#### Tabla: `visibility`
+Define la relación entre mensajes y usuarios (permite el historial individual y por grupo).
+
+| Campo        | Tipo      | Descripción |
+|--------------|-----------|-------------|
+| message_id   | TEXT (FK → messages.id) | Mensaje visible para el usuario |
+| username     | TEXT (FK → user.username) | Usuario que puede ver el mensaje |
+
+---
+
+### Relación entre las tablas
+
+La tabla `messages` almacena cada mensaje enviado en el sistema (texto o nota de voz). La tabla `user` registra los usuarios existentes. La tabla `visibility` actúa como tabla de relación entre ambas, indicando qué usuarios pueden ver cada mensaje. Esto permite soportar:
+
+- Mensajes 1:1 (visibility tiene 2 entradas: emisor y receptor)
+- Mensajes a grupos (visibility genera una entrada por cada miembro del grupo)
+- Historial persistente y filtrado por usuario
+
+De esta manera, el sistema no duplica mensajes en la base de datos, sino que los vincula a múltiples usuarios según corresponda.
+
 
 ---
 
