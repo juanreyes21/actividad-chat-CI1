@@ -1,155 +1,199 @@
-# Chat de Consola con Llamadas (TCP/UDP)
-
-Proyecto Java que cumple el entregable: grupos, texto 1:1 y a grupos, notas de voz, llamadas 1:1 y a grupos, e historial (texto y audios) persistente.
+# Sistema de Chat CI1 (TCP/UDP + Proxy HTTP + Cliente Web)
 
 ## Integrantes
+- Sebastian Castillo
+- Juan José Reyes
+- Ismael Barrionuevo
 
-* Juan José Reyes Ramos - A00405296
-* Ismael Barrionuevo
-* Sebastián Castillo
+## Descripción general
 
+Este sistema implementa un chat funcional distribuido en tres componentes:
 
+1. Cliente Web (HTML, CSS, JavaScript)
+2. Proxy HTTP desarrollado en Node.js (traduce peticiones HTTP a mensajes TCP)
+3. Servidor backend en Java, con persistencia del historial en SQLite
 
-## Cómo ejecutar
+El servidor maneja conexiones de múltiples clientes, almacena el historial de mensajes en SQLite y reenvía mensajes entre los usuarios conectados.
 
-Windows PowerShell (usar .\gradlew.bat). Linux/macOS (usar ./gradlew).
+La base de datos se genera automáticamente, no requiere configuración manual.
 
-1. servidor
+---
 
-```
-.\gradlew.bat -x test runServer
-```
-
-aparece: “Servidor de chat iniciado en el puerto 9090” y “CallRelay UDP escuchando en puerto 10000”.
-
-2. clientes (cada uno en una ventana nueva)
-
-```
-.\gradlew.bat -x test runClient
-```
-
-cuando pida el usuario, escribir por ejemplo:
+## Arquitectura de comunicación
 
 ```
-a
+Cliente Web (HTTP/JSON)
+        |
+        v
+Proxy HTTP (Node.js/Express)  ---- TCP ---->  ProxyListener (Java) -> Servidor Java
+                                                          |
+                                                          v
+                                                      SQLite (historial)
 ```
 
-repetir en otra ventana para b (y opcionalmente c).
+Flujo del sistema:
 
-Notas
+1. El Cliente Web envía solicitudes HTTP al Proxy HTTP.
+2. El Proxy convierte esas solicitudes en mensajes TCP y las envía al ProxyListener del Servidor Java.
+3. El Servidor Java procesa la solicitud, guarda el historial en SQLite y distribuye mensajes a los clientes conectados.
+4. El Proxy HTTP envía la respuesta nuevamente al Cliente Web.
 
-* si prefieres tarea genérica run: el build ya define main en proyecto_chat.App. puedes añadir standardInput = System.in a la tarea run si necesitas leer teclado desde run.
+El Cliente Java (CLI) se conecta directamente al Servidor Java mediante sockets TCP, sin pasar por el proxy.
 
-## Comandos en el cliente
+---
 
-texto 1:1
+## Requisitos
 
+| Software | Versión recomendada |
+|----------|---------------------|
+| JDK      | 17 o superior |
+| Node.js  | 18 o superior (incluye npm) |
+| Gradle   | No es necesario instalar, el proyecto incluye `gradlew` |
+
+SQLite no requiere instalación previa; la base de datos se crea automáticamente.
+
+---
+
+## Estructura del proyecto
+
+```
+proyecto_chat/
+ ├─ app/
+ │  ├─ src/main/java/proyecto_chat/
+ │  │  ├─ server/      -> Backend Java (Server.java, ClientHandler.java, ProxyListener.java, HistoryManager.java, CallRelay.java)
+ │  │  ├─ proxy/       -> Proxy HTTP en Node.js (app.js, package.json)
+ │  │  └─ client/      -> Cliente Web (index.html, style.css, js/chat.js)
+ │  └─ storage/        -> chat_history.db (SQLite)
+ ├─ gradlew / gradlew.bat
+ └─ settings.gradle
+```
+
+---
+
+## Instrucciones para ejecutar
+
+### 1) Iniciar el servidor Java (backend)
+
+Ubicarse en la carpeta principal del proyecto:
+
+```
+cd proyecto_chat
+```
+
+En Windows (PowerShell):
+
+```
+.\gradlew.bat :app:runServer
+```
+
+En Linux/Mac:
+
+```
+./gradlew :app:runServer
+```
+
+---
+
+### 2) Ejecutar el Proxy HTTP (Node.js)
+
+En otra terminal:
+
+```
+cd proyecto_chat/app/src/main/java/proyecto_chat/proxy
+npm install
+npm start
+```
+
+Salida esperada:
+
+```
+Proxy HTTP escuchando en http://localhost:3000
+```
+
+---
+
+### 3) Abrir el Cliente Web
+
+Abrir en el navegador:
+
+```
+http://localhost:3000/index.html
+```
+
+---
+
+## Comandos del cliente CLI (mensajería y llamadas)
+
+Texto a usuario:
 ```
 destinatario@mensaje
 ```
 
-texto a grupo
-
+Texto a grupo:
 ```
 grupo@mensaje
 ```
 
-crear/unirse a grupo
-
+Crear grupo:
 ```
 creategroup@nombre
+```
+
+Unirse a grupo:
+```
 joingroup@nombre
 ```
 
-nota de voz a usuario o grupo (ruta a .wav local)
-
+Nota de voz (ruta a archivo .wav):
 ```
 voicenote@destinatario@archivo.wav
-voicenote@grupo@archivo.wav
 ```
 
-llamada 1:1
-
+Llamada 1:1:
 ```
 call@usuario
 callaccept@usuario
 hangup@usuario
 ```
 
-llamada a grupo
-
+Llamada grupal:
 ```
 call@grupo
 callaccept@grupo
 hangup@grupo
 ```
 
-## Flujo de prueba recomendado
+---
 
-texto 1:1
+## Persistencia en SQLite
 
-1. en a: `b@hola b`  → b ve el mensaje
+Ubicación:
+```
+proyecto_chat/app/storage/chat_history.db
+```
 
-grupo
+Audios:
+```
+proyecto_chat/app/storage/audio/
+```
 
-1. en a: `creategroup@equipo`
-2. en b: `joingroup@equipo` (y c igual)
-3. en a: `equipo@hola equipo`  → b y c reciben
+Tabla principal `messages`:
 
-llamada 1:1
+| Campo | Descripción |
+|--------|------------|
+| id | identificador del mensaje |
+| type | TEXT o VOICE_NOTE |
+| sender | emisor |
+| recipient | usuario o grupo |
+| text_content | mensaje (si aplica) |
+| file_path | ruta del audio (si aplica) |
+| timestamp | epoch ms |
 
-1. en a: `call@b`  → b verá el aviso para aceptar
-2. en b: `callaccept@a`  → ambos conectan audio
-3. colgar: `hangup@a` o `hangup@b`
-
-llamada a grupo
-
-1. en a: `call@equipo`
-2. en b: `callaccept@equipo` y en c: `callaccept@equipo`
-3. cada miembro que cuelgue: `hangup@equipo`
+---
 
 ## Decisiones de diseño
 
-* TCP para control, texto y notas de voz (fiabilidad/orden)
-* UDP para audio en tiempo real (baja latencia)
-* callId único generado por el caller en CALL_START y reutilizado por todos en CALL_ACCEPT
-* historial en SQLite (storage/chat_history.db) y audios en storage/audio
-
-## Persistencia
-
-tabla messages (SQLite)
-
-* id TEXT (PK)
-* type TEXT [TEXT|VOICE_NOTE]
-* sender TEXT
-* recipient TEXT
-* text_content TEXT (UTF-8)
-* file_path TEXT (ruta absoluta del .wav, si aplica)
-* timestamp INTEGER (epoch ms)
-
-rutas
-
-* base de datos: storage/chat_history.db
-* audios: storage/audio/
-
-## Estructura principal
-
-* proyecto_chat.App (entrypoint)
-* client
-
-  * Client (CLI)
-  * AudioSender (captura micrófono → UDP)
-  * AudioReceiver (UDP → altavoces)
-* common
-
-  * Message (UTF-8)
-* server
-
-  * Server (TCP)
-  * ClientHandler (ruteo a usuarios/grupos y señalización)
-  * CallRelay (relay UDP con registro, BYE y broadcast)
-  * HistoryManager (SQLite + archivos)
-
-
-
-
+- TCP para mensajes y notas de voz (fiabilidad)
+- UDP para llamadas (baja latencia)
+- El proxy solo traduce HTTP → TCP. No tiene lógica de negocio.
+- El cliente CLI se conecta directamente al servidor sin pasar por el proxy.
