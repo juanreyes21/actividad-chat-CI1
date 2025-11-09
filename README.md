@@ -122,46 +122,16 @@ http://localhost:3000/index.html
 
 ---
 
-## Comandos del cliente CLI (mensajería y llamadas)
+## Cliente Web (UI actual)
 
-Texto a usuario:
-```
-destinatario@mensaje
-```
+En esta versión del proyecto, el usuario interactúa mediante la interfaz web
 
-Texto a grupo:
-```
-grupo@mensaje
-```
 
-Crear grupo:
-```
-creategroup@nombre
-```
+La comunicación desde el navegador se realiza mediante solicitudes HTTP al Proxy (Node.js), y este las traduce a mensajes TCP hacia el servidor Java.
 
-Unirse a grupo:
-```
-joingroup@nombre
-```
+**Las acciones (enviar mensajes, crear grupos, consultar historial, etc.) se gestionan desde la interfaz web.  
+No es necesario usar comandos en consola.**
 
-Nota de voz (ruta a archivo .wav):
-```
-voicenote@destinatario@archivo.wav
-```
-
-Llamada 1:1:
-```
-call@usuario
-callaccept@usuario
-hangup@usuario
-```
-
-Llamada grupal:
-```
-call@grupo
-callaccept@grupo
-hangup@grupo
-```
 
 ---
 
