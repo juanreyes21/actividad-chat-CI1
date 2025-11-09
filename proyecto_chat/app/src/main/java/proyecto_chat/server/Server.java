@@ -4,9 +4,10 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.sql.PreparedStatement;
+import java.sql.*;
+import java.util.concurrent.*;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class Server implements Runnable {
     private int port;
@@ -42,12 +43,12 @@ public class Server implements Runnable {
         return users;
     }
 
-    public java.util.Set<String> listGroupsForUserFromDb(String username) {
-        java.util.Set<String> out = java.util.concurrent.ConcurrentHashMap.newKeySet();
-        try (java.sql.PreparedStatement ps = historyManager.getConnection()
+    public Set<String> listGroupsForUserFromDb(String username) {
+        Set<String> out = ConcurrentHashMap.newKeySet();
+        try (PreparedStatement ps = historyManager.getConnection()
                 .prepareStatement("SELECT group_name FROM group_members WHERE username = ?")) {
             ps.setString(1, username);
-            try (java.sql.ResultSet rs = ps.executeQuery()) {
+            try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) out.add(rs.getString("group_name"));
             }
         } catch (Exception e) {
@@ -57,9 +58,9 @@ public class Server implements Runnable {
     }
 
     private void hydrateGroupsFromDb() {
-        try (java.sql.PreparedStatement ps = historyManager.getConnection()
+        try (PreparedStatement ps = historyManager.getConnection()
                 .prepareStatement("SELECT group_name, username FROM group_members");
-            java.sql.ResultSet rs = ps.executeQuery()) {
+            ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 String g = rs.getString("group_name");
                 String u = rs.getString("username");
@@ -201,7 +202,7 @@ public class Server implements Runnable {
         */
     }
 
-    public java.sql.ResultSet fetchHistoryForRecipient(String username, String chatTarget) throws java.sql.SQLException {
+    public ResultSet fetchHistoryForRecipient(String username, String chatTarget) throws SQLException {
         return this.historyManager.fetchHistory(username, chatTarget);
     }
 
