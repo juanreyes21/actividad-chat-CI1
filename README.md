@@ -1,9 +1,9 @@
 # Sistema de Chat CI1 (TCP/UDP + Proxy HTTP + Cliente Web)
 
 ## Integrantes
-- Sebastian Castillo
-- Juan José Reyes
-- Ismael Barrionuevo
+- Sebastian Castillo - A00170732
+- Juan José Reyes - A00405296
+- Ismael Barrionuevo - A00403480
 
 ## Descripción general
 
