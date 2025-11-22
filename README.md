@@ -1,120 +1,215 @@
-# Sistema de Chat CI1 (TCP/UDP + Proxy HTTP + Cliente Web)
+# Sistema de Chat CI1 – Migración Completa (TCP/UDP → HTTP → ICE/WebSockets)
 
 ## Integrantes
-- Sebastian Castillo - A00170732
-- Juan José Reyes - A00405296
-- Ismael Barrionuevo - A00403480
-
-## Descripción general
-
-Este sistema implementa un chat funcional distribuido en tres componentes:
-
-1. Cliente Web (HTML, CSS, JavaScript)
-2. Proxy HTTP desarrollado en Node.js (traduce peticiones HTTP a mensajes TCP)
-3. Servidor backend en Java, con persistencia del historial en SQLite
-
-El servidor maneja conexiones de múltiples clientes, almacena el historial de mensajes en SQLite y reenvía mensajes entre los usuarios conectados.
-
-La base de datos se genera automáticamente, no requiere configuración manual.
+- **Sebastián Castillo** – A00170732  
+- **Juan José Reyes** – A00405296  
+- **Ismael Barrionuevo** – A00403480  
 
 ---
 
-## Arquitectura de comunicación
+# Descripción General
 
-```
-Cliente Web (HTTP/JSON)
-        |
-        v
-Proxy HTTP (Node.js/Express)  ---- TCP ---->  ProxyListener (Java) -> Servidor Java
-                                                          |
-                                                          v
-                                                      SQLite (historial)
-```
+Este proyecto implementa un sistema de chat distribuido desarrollado progresivamente a través de las tareas del curso:
 
-Flujo del sistema:
+## **Tarea 1 – Cliente CLI + Servidor Java (TCP/UDP)**
+- Mensajes 1:1 y grupos  
+- Notas de voz  
+- Llamadas 1:1 y grupales  
+- Historial persistente con SQLite  
+- Cliente en consola usando sockets TCP/UDP  
 
-1. El Cliente Web envía solicitudes HTTP al Proxy HTTP.
-2. El Proxy convierte esas solicitudes en mensajes TCP y las envía al ProxyListener del Servidor Java.
-3. El Servidor Java procesa la solicitud, guarda el historial en SQLite y distribuye mensajes a los clientes conectados.
-4. El Proxy HTTP envía la respuesta nuevamente al Cliente Web.
+## **Tarea 2 – Cliente Web + Proxy HTTP**
+- Migración del cliente a navegador (HTML/CSS/JS)  
+- Proxy en Node.js que traduce HTTP → TCP  
+- Servidor Java reutilizado sin cambios en lógica  
+- Historial y mensajes ahora accesibles por web  
 
-El Cliente Java (CLI) se conecta directamente al Servidor Java mediante sockets TCP, sin pasar por el proxy.
+## **Proyecto Final – Migración a ZeroC ICE (RPC + WebSockets)**
+- El cliente web ahora se conecta al servidor mediante **RPC con ZeroC Ice**  
+- ICE se expone al navegador usando **WebSockets**  
+- Se reemplaza la comunicación HTTP→TCP del Proxy para mensajes en tiempo real  
+- Persistencia continúa en SQLite  
+- El login y otras operaciones HTTP siguen funcionando vía proxy  
+
+**Falta por implementar (otros miembros del equipo lo harán):**
+- **Notas de voz desde el navegador (MediaRecorder + WebSocket)**  
+- **Llamadas WebRTC/WebSocket desde navegador**  
+- Basado en el ejemplo:  
+  https://github.com/AlejandroMu/compu-internet-1/tree/master/audio_rep  
 
 ---
 
-## Requisitos
+# Arquitectura General del Sistema
+
+```
+                       ┌──────────────────────┐
+                       │      Navegador       │
+                       │  (HTML / JS + ICE)   │
+                       └──────────┬───────────┘
+                                  │
+                       WebSockets │ ICE RPC
+                                  ▼
+                ┌────────────────────────────────┐
+                │      ICE Server (Java)         │
+                │  - RPC Methods (login, send)   │
+                │  - Callbacks a clientes        │
+                └──────────┬─────────────────────┘
+                           │
+                           │ TCP/HTTP
+                           ▼
+                ┌────────────────────────────────┐
+                │     Backend Java (Servidor)     │
+                │  - Historial en SQLite          │
+                │  - Grupos / Visibilidad         │
+                │  - Persistencia completa        │
+                └──────────┬─────────────────────┘
+                           │
+                     HTTP  │
+                           ▼
+           ┌────────────────────────────────────┐
+           │    Proxy Node.js (solo para HTTP)   │
+           │  login / historial / endpoints REST │
+           └────────────────────────────────────┘
+```
+
+---
+
+# Requisitos
 
 | Software | Versión recomendada |
 |----------|---------------------|
-| JDK      | 17 o superior |
-| Node.js  | 18 o superior (incluye npm) |
-| Gradle   | No es necesario instalar, el proyecto incluye `gradlew` |
-
-SQLite no requiere instalación previa; la base de datos se crea automáticamente.
+| **Java** | 17 o superior (se probó con Java 21) |
+| **Node.js** | 18 o superior |
+| **npm** | Incluido con Node |
+| **ZeroC Ice** | 3.7.10 |
+| **SQLite** | No requiere instalación |
 
 ---
 
-## Estructura del proyecto
+# Estructura del Proyecto
 
 ```
 proyecto_chat/
  ├─ app/
  │  ├─ src/main/java/proyecto_chat/
- │  │  ├─ server/      -> Backend Java (Server.java, ClientHandler.java, ProxyListener.java, HistoryManager.java, CallRelay.java)
- │  │  ├─ proxy/       -> Proxy HTTP en Node.js (app.js, package.json)
- │  │  └─ client/      -> Cliente Web (index.html, style.css, js/chat.js)
- │  └─ storage/        -> chat_history.db (SQLite)
+ │  │  ├─ server/      -> Servidor Java + ICE
+ │  │  ├─ client/      -> Cliente Web
+ │  │  │   ├─ index.html
+ │  │  │   ├─ js/chat.js
+ │  │  │   └─ ice/ (Ice.js + stubs generados)
+ │  │  └─ proxy/       -> Proxy HTTP en Node.js
+ │  ├─ src/main/slice/ -> Archivo chat.ice
+ │  └─ storage/        -> chat_history.db
  ├─ gradlew / gradlew.bat
  └─ settings.gradle
 ```
 
 ---
 
-## Instrucciones para ejecutar
+# Modelo de Datos (SQLite)
 
-### 1) Iniciar el servidor Java (backend)
+### **messages**
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| id | TEXT (PK) | Identificador único |
+| type | TEXT | TEXT / VOICE_NOTE |
+| sender | TEXT | Usuario emisor |
+| recipient | TEXT | Usuario o grupo |
+| text_content | TEXT | Contenido |
+| file_path | TEXT | Ruta al .wav |
+| timestamp | INTEGER | Epoch ms |
 
-Ubicarse en la carpeta principal del proyecto:
+### **user**
+| Campo | Tipo |
+|--------|------|
+| username | TEXT (PK) |
+| created_at | INTEGER |
 
-```
-cd proyecto_chat
-```
+### **visibility**
+| Campo | Tipo |
+|--------|------|
+| message_id | TEXT (FK → messages.id) |
+| username | TEXT (FK → user.username) |
 
-En Windows (PowerShell):
+### Relación entre tablas
+- `messages` almacena cada mensaje.
+- `user` registra usuarios.
+- `visibility` indica qué usuario puede ver cada mensaje.
+- Soporta grupos sin duplicar mensajes.
 
-```
-.\gradlew.bat :app:runServer
-```
+---
 
-En Linux/Mac:
+# Definición ICE (chat.ice)
 
-```
-./gradlew :app:runServer
+```slice
+module Chat {
+    struct Msg {
+        string id;
+        string sender;
+        string recipient;
+        string text;
+        long   timestamp;
+    };
+
+    sequence<Msg> MsgSeq;
+
+    interface ClientCallback {
+        void onNewMessage(Msg m);
+        void onUserJoined(string username);
+        void onUserLeft(string username);
+    };
+
+    interface Service {
+        void login(string username, ClientCallback* cb);
+        void sendText(string username, string recipient, string text);
+        void createGroup(string username, string group);
+        void joinGroup(string username, string group);
+        MsgSeq getHistory(string recipient, int limit);
+    };
+};
 ```
 
 ---
 
-### 2) Ejecutar el Proxy HTTP (Node.js)
+# Flujo ICE + WebSockets (tiempo real)
 
-En otra terminal:
+1. El usuario inicia sesión por HTTP.
+2. El navegador ejecuta:  
+   `initIce(username)`
+3. Se establece conexión ICE/WS con el servidor:
+   ```
+   ChatService:ws -h 127.0.0.1 -p 12000
+   ```
+4. El cliente registra su callback.
+5. Cuando hay un mensaje nuevo:
+   - servidor llama `onNewMessage(msg)`
+   - navegador actualiza el chat automáticamente.
 
+---
+
+# Instrucciones de Ejecución
+
+### 1. Backend Java (Servidor HTTP + Persistencia)
+```bash
+cd proyecto_chat
+.\gradlew.bat :app:runServer
 ```
+
+### 2. Servidor ICE (RPC + WebSockets)
+```bash
+cd proyecto_chat
+.\gradlew.bat :app:runIceServer
+```
+
+### 3. Proxy HTTP (Node.js)
+```bash
 cd proyecto_chat/app/src/main/java/proyecto_chat/proxy
 npm install
 npm start
 ```
 
-Salida esperada:
-
-```
-Proxy HTTP escuchando en http://localhost:3000
-```
-
----
-
-### 3) Abrir el Cliente Web
-
-Abrir en el navegador:
+### 4. Cliente Web
+Abrir en navegador:
 
 ```
 http://localhost:3000/index.html
@@ -122,85 +217,29 @@ http://localhost:3000/index.html
 
 ---
 
-## Cliente Web (UI actual)
+# Pendiente por desarrollar (otros miembros del equipo)
 
-En esta versión del proyecto, el usuario interactúa mediante la interfaz web
+### Requerimiento obligatorio
+✔ **Notas de voz desde navegador usando WebSockets**
 
+### Referencia oficial:
+https://github.com/AlejandroMu/compu-internet-1/tree/master/audio_rep
 
-La comunicación desde el navegador se realiza mediante solicitudes HTTP al Proxy (Node.js), y este las traduce a mensajes TCP hacia el servidor Java.
-
-**Las acciones (enviar mensajes, crear grupos, consultar historial, etc.) se gestionan desde la interfaz web.  
-No es necesario usar comandos en consola.**
-
-
----
-
-## Persistencia en SQLite
-
-Ubicación:
-```
-proyecto_chat/app/storage/chat_history.db
-```
-
-Audios:
-```
-proyecto_chat/app/storage/audio/
-```
-
-
-### Tablas del sistema
-
-#### Tabla: `messages`
-Guarda el historial de mensajes (texto y notas de voz).
-
-| Campo        | Tipo      | Descripción |
-|--------------|-----------|-------------|
-| id           | TEXT (PK) | Identificador único del mensaje |
-| type         | TEXT      | TEXT o VOICE_NOTE |
-| sender       | TEXT      | Usuario que envía |
-| recipient    | TEXT      | Usuario o grupo destino |
-| text_content | TEXT      | Contenido del mensaje si aplica |
-| file_path    | TEXT      | Ruta al archivo .wav (notas de voz) |
-| timestamp    | INTEGER   | Epoch ms |
+Se debe implementar:
+- Grabación con `MediaRecorder`
+- Envío binario por WebSocket
+- Recepción en Java
+- Reproducción en navegador
+- Integración con historial SQLite
 
 ---
 
-#### Tabla: `user`
-Representa un usuario registrado en el sistema.
+# Notas finales
 
-| Campo        | Tipo      | Descripción |
-|--------------|-----------|-------------|
-| username     | TEXT (PK) | Identificador del usuario |
-| created_at   | INTEGER   | Fecha de creación (epoch ms) |
+- El proyecto combina 3 tecnologías de red: TCP/UDP, HTTP y ZeroC Ice.  
+- Se migró exitosamente la comunicación web a un mecanismo RPC moderno (ICE).  
+- La arquitectura permite ampliación a llamadas por WebRTC y notas de voz.  
 
 ---
 
-#### Tabla: `visibility`
-Define la relación entre mensajes y usuarios (permite el historial individual y por grupo).
-
-| Campo        | Tipo      | Descripción |
-|--------------|-----------|-------------|
-| message_id   | TEXT (FK → messages.id) | Mensaje visible para el usuario |
-| username     | TEXT (FK → user.username) | Usuario que puede ver el mensaje |
-
----
-
-### Relación entre las tablas
-
-La tabla `messages` almacena cada mensaje enviado en el sistema (texto o nota de voz). La tabla `user` registra los usuarios existentes. La tabla `visibility` actúa como tabla de relación entre ambas, indicando qué usuarios pueden ver cada mensaje. Esto permite soportar:
-
-- Mensajes 1:1 (visibility tiene 2 entradas: emisor y receptor)
-- Mensajes a grupos (visibility genera una entrada por cada miembro del grupo)
-- Historial persistente y filtrado por usuario
-
-De esta manera, el sistema no duplica mensajes en la base de datos, sino que los vincula a múltiples usuarios según corresponda.
-
-
----
-
-## Decisiones de diseño
-
-- TCP para mensajes y notas de voz (fiabilidad)
-- UDP para llamadas (baja latencia)
-- El proxy solo traduce HTTP → TCP. No tiene lógica de negocio.
-- El cliente CLI se conecta directamente al servidor sin pasar por el proxy.
+**Este README documenta completamente el estado actual del sistema y su migración a ICE.**
