@@ -23,6 +23,8 @@ dependencies {
     implementation 'org.xerial:sqlite-jdbc:3.41.2.1'
     implementation 'com.google.code.gson:gson:2.10.1'
     implementation 'org.json:json:20230227'
+    implementation 'com.zeroc:ice:3.7.10'
+	
 
     // This dependency is used by the application.
     implementation libs.guava
@@ -62,4 +64,31 @@ task runClient(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'proyecto_chat.client.Client'
     standardInput = System.in // Permite escribir en la consola
+}
+
+// === Generación de stubs Java desde Slice (ICE) ===
+def sliceInput  = "$projectDir/src/main/slice/chat.ice"
+def sliceOutput = "$projectDir/src/main/generated"
+
+tasks.register('slice2java', Exec) {
+    group = "codegen"
+    description = "Genera clases Java desde chat.ice"
+    inputs.file(sliceInput)
+    outputs.dir(sliceOutput)
+
+    doFirst {
+        new File(sliceOutput).mkdirs()
+    }
+
+    // Requiere que 'slice2java' esté en el PATH (instalado con ZeroC Ice)
+    commandLine 'slice2java', '--output-dir', sliceOutput, sliceInput
+}
+
+// Incluir el código generado en el source set principal
+sourceSets {
+    main {
+        java {
+            srcDirs += sliceOutput
+        }
+    }
 }
