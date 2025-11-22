@@ -1,6 +1,88 @@
 let username = null;
 let activeChat = null;
 
+// =========================
+// Integración ICE (WebSocket)
+// =========================
+let iceCommunicator = null;
+let iceService = null;
+let iceAdapter = null;
+
+async function initIce(username) {
+    if (iceService) {
+        // Ya está inicializado
+        return;
+    }
+
+    try {
+        // Inicializar Ice en el navegador
+        const initData = new Ice.InitializationData();
+        iceCommunicator = Ice.initialize([], initData);
+
+        // Proxy al servicio en el servidor ICE
+        // Debe coincidir con el endpoint de IceServer.java:
+        // "ws -h 127.0.0.1 -p 12000"
+        const base = iceCommunicator.stringToProxy("ChatService:ws -h 127.0.0.1 -p 12000");
+        iceService = await Chat.ServicePrx.checkedCast(base);
+
+        if (!iceService) {
+            console.error("No se pudo hacer checkedCast a Chat.ServicePrx");
+            return;
+        }
+
+        // Adapter para callbacks (bidireccional)
+        iceAdapter = iceCommunicator.createObjectAdapter("");
+
+        // Implementación del callback que el servidor va a invocar
+        class ClientCallbackI extends Chat.ClientCallback {
+            async onNewMessage(msg, current) {
+                console.log("[ICE] onNewMessage", msg);
+
+                if (!activeChat) return;
+
+                const chatLower = activeChat.toLowerCase();
+                const sender = (msg.sender || "").toLowerCase();
+                const recipient = (msg.recipient || "").toLowerCase();
+
+                // Si el mensaje pertenece al chat activo, recargamos el historial
+                if (chatLower === sender || chatLower === recipient) {
+                    try {
+                        await loadHistoryIncremental(activeChat, true);
+                    } catch (e) {
+                        console.error("[ICE] Error refrescando historial:", e);
+                    }
+                }
+            }
+
+            async onUserJoined(user, current) {
+                console.log("[ICE] onUserJoined:", user);
+                // Si quieres, podrías recargar la sidebar:
+                // await loadSidebar();
+            }
+
+            async onUserLeft(user, current) {
+                console.log("[ICE] onUserLeft:", user);
+            }
+        }
+
+        const cb = new ClientCallbackI();
+        // Registramos el callback local y creamos un proxy hacia él
+        const cbPrx = await iceAdapter.addWithUUID(cb);
+
+        // Asociar el adapter a la conexión para callbacks bidireccionales
+        const conn = await iceService.ice_getConnection();
+        conn.setAdapter(iceAdapter);
+
+        // Hacemos login en el servicio ICE, pasando el callback
+        await iceService.login(username, cbPrx);
+
+        console.log("[ICE] Cliente conectado a ICE como", username);
+    } catch (e) {
+        console.error("[ICE] Error inicializando ICE:", e);
+    }
+}
+
+
 // Estado para refresco/scroll incremental
 const RENDERED_KEYS = new Set();   // evita duplicados
 let autoRefresh = true;            // solo refresca si el usuario está al fondo
@@ -46,6 +128,10 @@ document.getElementById("loginBtn").onclick = async () => {
     if (r.status === "ok") {
         username = u;
         localStorage.username = u;
+
+        // === Nuevo: conectar también a ICE ===
+        await initIce(u);
+
         showApp();
         document.getElementById("welcomeUser").textContent = capitalize(username);
     } else {
@@ -223,15 +309,26 @@ document.getElementById('send').onclick = async () => {
     const text = document.getElementById("text").value;
     if (!text.trim()) return;
 
+    // 1) Persistencia vía HTTP (backend anterior)
     await api('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, recipient: activeChat, text })
     });
 
+    // 2) Notificación en tiempo real vía ICE (broadcast)
+    if (iceService) {
+        try {
+            await iceService.sendText(username, activeChat, text);
+        } catch (e) {
+            console.error("[ICE] Error enviando sendText:", e);
+        }
+    }
+
     document.getElementById("text").value = '';
-    await loadHistoryIncremental(activeChat, true); // baja al final
+    await loadHistoryIncremental(activeChat, true); // tu comportamiento actual
 };
+
 
 document.getElementById('text').onkeypress = (e) => {
     if (e.key === 'Enter') document.getElementById('send').click();

@@ -92,3 +92,12 @@ sourceSets {
         }
     }
 }
+
+// === Ejecutar servidor ICE (WebSocket) ===
+tasks.register('runIceServer', JavaExec) {
+    group = "application"
+    description = "Servidor ICE por WebSocket (ws://127.0.0.1:12000)"
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'proyecto_chat.server.IceServer'
+}
+
