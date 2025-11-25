@@ -29,9 +29,9 @@ COPY start.sh .
 RUN chmod +x start.sh
 
 # Exponer puertos que usa tu proyecto
-EXPOSE 9090    # servidor principal
-EXPOSE 10000   # ICE
-EXPOSE 3000    # proxy Node (o el que uses)
+EXPOSE 9090
+EXPOSE 10000
+EXPOSE 3000
 
 # Ejecutar el script que inicia los 3 procesos
 CMD ["bash", "start.sh"]
