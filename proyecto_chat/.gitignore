@@ -3,3 +3,6 @@
 
 # Ignore Gradle build output directory
 build
+
+proyecto_chat/app/storage/chat_history.db
+
