@@ -15,6 +15,14 @@ public class Server implements Runnable {
     private ConcurrentHashMap<String, ClientHandler> clients = new ConcurrentHashMap<>();
     private ConcurrentHashMap<String, Set<String>> groups = new ConcurrentHashMap<>();
     private Set<String> users = ConcurrentHashMap.newKeySet(); 
+    // llamadas entrantes simples: callee(lowercase) -> caller
+    private ConcurrentHashMap<String, String> incomingCalls = new ConcurrentHashMap<>();
+    // Señalización WebRTC: offers/answers/candidates pendientes por usuario destino
+    private ConcurrentHashMap<String, String> pendingOffersByUser = new ConcurrentHashMap<>();
+    private ConcurrentHashMap<String, String> pendingAnswersByUser = new ConcurrentHashMap<>();
+    private ConcurrentHashMap<String, java.util.List<String>> pendingCandidatesByUser = new ConcurrentHashMap<>();
+    // Notificación simple de fin de llamada: usuario -> hubo call_end pendiente
+    private ConcurrentHashMap<String, Boolean> pendingCallEndByUser = new ConcurrentHashMap<>();
     private HistoryManager historyManager;
     private CallRelay callRelay;
 
@@ -244,5 +252,62 @@ public class Server implements Runnable {
             e.printStackTrace();
             return null;
         }
+    }
+
+    // --- Soporte básico de llamadas para cliente web ---
+    public void registerIncomingCall(String caller, String callee) {
+        if (caller == null || callee == null) return;
+        incomingCalls.put(callee.toLowerCase(), caller);
+    }
+
+    public String consumeIncomingCall(String callee) {
+        if (callee == null) return null;
+        return incomingCalls.remove(callee.toLowerCase());
+    }
+
+    // --- Señalización WebRTC ---
+    public void registerOfferForUser(String targetUser, String json) {
+        if (targetUser == null || json == null) return;
+        pendingOffersByUser.put(targetUser.toLowerCase(), json);
+    }
+
+    public String consumeOfferForUser(String targetUser) {
+        if (targetUser == null) return null;
+        return pendingOffersByUser.remove(targetUser.toLowerCase());
+    }
+
+    public void registerAnswerForUser(String targetUser, String json) {
+        if (targetUser == null || json == null) return;
+        pendingAnswersByUser.put(targetUser.toLowerCase(), json);
+    }
+
+    public String consumeAnswerForUser(String targetUser) {
+        if (targetUser == null) return null;
+        return pendingAnswersByUser.remove(targetUser.toLowerCase());
+    }
+
+    public void registerCandidateForUser(String targetUser, String candidateJson) {
+        if (targetUser == null || candidateJson == null) return;
+        String key = targetUser.toLowerCase();
+        pendingCandidatesByUser.computeIfAbsent(key, k -> new java.util.ArrayList<>()).add(candidateJson);
+    }
+
+    public java.util.List<String> consumeCandidatesForUser(String targetUser) {
+        if (targetUser == null) return java.util.Collections.emptyList();
+        String key = targetUser.toLowerCase();
+        java.util.List<String> list = pendingCandidatesByUser.remove(key);
+        if (list == null) return java.util.Collections.emptyList();
+        return list;
+    }
+
+    public void registerCallEndForUser(String targetUser) {
+        if (targetUser == null) return;
+        pendingCallEndByUser.put(targetUser.toLowerCase(), Boolean.TRUE);
+    }
+
+    public boolean consumeCallEndForUser(String targetUser) {
+        if (targetUser == null) return false;
+        String key = targetUser.toLowerCase();
+        return pendingCallEndByUser.remove(key) != null;
     }
 }
