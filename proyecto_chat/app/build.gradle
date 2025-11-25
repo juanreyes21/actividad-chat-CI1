@@ -42,11 +42,6 @@ application {
     mainClass = 'proyecto_chat.App'
 }
 
-tasks.named('test') {
-    useJUnitPlatform()
-    failOnNoDiscoveredTests = false
-}
-
 
 
 // Tarea para ejecutar el servidor
