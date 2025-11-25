@@ -1,6 +1,10 @@
 let username = null;
 let activeChat = null;
 
+let mediaRecorder = null;
+let audioChunks = [];
+let audioSocket = null;
+
 // =========================
 // Integración ICE (WebSocket)
 // =========================
@@ -188,6 +192,7 @@ async function openChat(chat) {
     document.getElementById("activeChatName").textContent = capitalize(chat);
     document.getElementById("text").disabled = false;
     document.getElementById("send").disabled = false;
+    document.getElementById("recordVoice").disabled = false;
 
     const box = document.getElementById('messages');
     box.innerHTML = '';
@@ -215,6 +220,7 @@ document.getElementById("deleteChatBtn").onclick = async () => {
     document.getElementById("messages").innerHTML = "";
     document.getElementById("text").disabled = true;
     document.getElementById("send").disabled = true;
+    document.getElementById("recordVoice").disabled = true;
     RENDERED_KEYS.clear();
 };
 
@@ -231,7 +237,7 @@ async function loadHistoryIncremental(recipient, forceScrollBottom = false) {
     let appended = 0;
 
     r.messages.forEach(m => {
-        const key = `${m.timestamp}|${(m.sender || '').toLowerCase()}|${m.text_content || ''}`;
+        const key = `${m.id || ''}|${m.timestamp}|${(m.sender || '').toLowerCase()}|${m.text_content || ''}|${m.type || ''}`;
         if (RENDERED_KEYS.has(key)) return;
 
         RENDERED_KEYS.add(key);
@@ -248,10 +254,17 @@ async function loadHistoryIncremental(recipient, forceScrollBottom = false) {
             minute: '2-digit'
         });
 
-        d.innerHTML = `
-            <div class="meta">${capitalize(m.sender)} • ${time}</div>
-            <div class="text">${escapeHtml(m.text_content || '(sin contenido)')}</div>
-        `;
+        if ((m.type || '').toUpperCase() === 'VOICE_NOTE') {
+            d.innerHTML = `
+                <div class="meta">${capitalize(m.sender)} • ${time}</div>
+                <audio controls src="/api/audio/${encodeURIComponent(m.id)}"></audio>
+            `;
+        } else {
+            d.innerHTML = `
+                <div class="meta">${capitalize(m.sender)} • ${time}</div>
+                <div class="text">${escapeHtml(m.text_content || '(sin contenido)')}</div>
+            `;
+        }
         box.appendChild(d);
     });
 
@@ -332,6 +345,70 @@ document.getElementById('send').onclick = async () => {
 
 document.getElementById('text').onkeypress = (e) => {
     if (e.key === 'Enter') document.getElementById('send').click();
+};
+
+function getAudioWebSocket() {
+    if (audioSocket && audioSocket.readyState === WebSocket.OPEN) {
+        return audioSocket;
+    }
+    audioSocket = new WebSocket('ws://localhost:3000/audio');
+    return audioSocket;
+}
+
+document.getElementById('recordVoice').onclick = async () => {
+    if (!activeChat) {
+        alert('Selecciona un chat primero.');
+        return;
+    }
+
+    const btn = document.getElementById('recordVoice');
+
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+        } catch (err) {
+            console.error('Error accediendo al micrófono:', err);
+            alert('No se pudo acceder al micrófono.');
+            return;
+        }
+
+        audioChunks = [];
+        const ws = getAudioWebSocket();
+
+        ws.onopen = () => {
+            ws.send(JSON.stringify({
+                sender: username,
+                recipient: activeChat,
+                fileName: 'note.webm'
+            }));
+        };
+
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) {
+                audioChunks.push(e.data);
+            }
+        };
+
+        mediaRecorder.onstop = async () => {
+            try {
+                const blob = new Blob(audioChunks, { type: 'audio/webm' });
+                const buffer = await blob.arrayBuffer();
+                const ws2 = getAudioWebSocket();
+
+                ws2.send(new Uint8Array(buffer));
+                ws2.send(JSON.stringify({ done: true }));
+            } catch (err) {
+                console.error('Error enviando nota de voz:', err);
+            }
+        };
+
+        mediaRecorder.start();
+        btn.textContent = '■';
+    } else if (mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        btn.textContent = '🎙';
+    }
 };
 
 // Crear/Unirse a grupo

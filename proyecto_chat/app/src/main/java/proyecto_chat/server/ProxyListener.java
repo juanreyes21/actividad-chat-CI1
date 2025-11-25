@@ -158,6 +158,31 @@ public class ProxyListener implements Runnable {
             }
 
 
+            case "send_voice": {
+                String sender = req.optString("username", null);
+                String recipient = req.optString("recipient", null);
+                String fileName = req.optString("fileName", "note.webm");
+                String dataBase64 = req.optString("dataBase64", null);
+                if (sender == null || recipient == null || dataBase64 == null) {
+                    return new JSONObject().put("status","error").put("message","username, recipient and dataBase64 required");
+                }
+                server.handleProxySendVoice(sender, recipient, fileName, dataBase64);
+                return new JSONObject().put("status","ok");
+            }
+
+            case "get_audio_path": {
+                String id = req.optString("id", null);
+                if (id == null) {
+                    return new JSONObject().put("status","error").put("message","id required");
+                }
+                String path = server.getAudioFilePathByIdFromProxy(id);
+                if (path == null) {
+                    return new JSONObject().put("status","error").put("message","audio not found");
+                }
+                return new JSONObject().put("status","ok").put("file_path", path);
+            }
+
+
 
             default:
                 res.put("status", "error");

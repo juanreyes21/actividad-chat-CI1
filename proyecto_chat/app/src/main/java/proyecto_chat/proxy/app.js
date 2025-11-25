@@ -1,6 +1,8 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const net = require('net');
+const path = require('path');
+const { WebSocketServer } = require('ws');
 
 const PROXY_HOST = '127.0.0.1';
 const PROXY_PORT = 10001; // donde escucha ProxyListener en Java
@@ -100,10 +102,82 @@ app.get('/api/groups/:username', async (req,res)=>{
 });
 
 
+// Endpoint para servir archivos de audio por id de mensaje
+app.get('/api/audio/:id', async (req, res) => {
+  const id = req.params.id;
+  try {
+    const r = await sendToJavaProxy({ action: 'get_audio_path', id });
+    if (r.status !== 'ok' || !r.file_path) {
+      return res.status(404).json({ status: 'error', message: 'audio not found' });
+    }
+    const filePath = r.file_path;
+    return res.sendFile(path.resolve(filePath));
+  } catch (err) {
+    console.error('Error en /api/audio:', err);
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
 app.use(express.static('../client'));
 
-app.listen(HTTP_PORT, () => {
+const server = app.listen(HTTP_PORT, () => {
   console.log(`Proxy HTTP escuchando en http://localhost:${HTTP_PORT}`);
+});
+
+// WebSocket para notas de voz
+const wss = new WebSocketServer({ server, path: '/audio' });
+
+wss.on('connection', (ws) => {
+  let meta = null;
+  let chunks = [];
+
+  ws.on('message', async (data, isBinary) => {
+    try {
+      if (!meta) {
+        // Primer mensaje: metadatos en JSON
+        const txt = isBinary ? data.toString('utf8') : data.toString();
+        meta = JSON.parse(txt);
+        return;
+      }
+
+      // Si llega un JSON con done:true, procesamos lo acumulado
+      if (!isBinary) {
+        const txt = data.toString();
+        try {
+          const obj = JSON.parse(txt);
+          if (obj && obj.done) {
+            const buffer = Buffer.concat(chunks);
+            const b64 = buffer.toString('base64');
+            const { sender, recipient, fileName = 'note.webm' } = meta;
+            await sendToJavaProxy({
+              action: 'send_voice',
+              username: sender,
+              recipient,
+              fileName,
+              dataBase64: b64
+            });
+            ws.close();
+            return;
+          }
+        } catch (_) {
+          // no es JSON de control, lo ignoramos
+        }
+      }
+
+      // Chunks binarios de audio
+      if (isBinary || data instanceof Buffer) {
+        chunks.push(Buffer.from(data));
+      }
+    } catch (err) {
+      console.error('Error en WebSocket /audio:', err);
+      ws.close();
+    }
+  });
+
+  ws.on('close', () => {
+    meta = null;
+    chunks = [];
+  });
 });
 
 // Login (auto-registro)
