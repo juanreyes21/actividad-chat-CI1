@@ -125,48 +125,6 @@ public interface ClientCallbackPrx extends com.zeroc.Ice.ObjectPrx
         return f;
     }
 
-    default void onCallSignal(String from, String target, String signalType, String callId)
-    {
-        onCallSignal(from, target, signalType, callId, com.zeroc.Ice.ObjectPrx.noExplicitContext);
-    }
-
-    default void onCallSignal(String from, String target, String signalType, String callId, java.util.Map<String, String> context)
-    {
-        _iceI_onCallSignalAsync(from, target, signalType, callId, context, true).waitForResponse();
-    }
-
-    default java.util.concurrent.CompletableFuture<Void> onCallSignalAsync(String from, String target, String signalType, String callId)
-    {
-        return _iceI_onCallSignalAsync(from, target, signalType, callId, com.zeroc.Ice.ObjectPrx.noExplicitContext, false);
-    }
-
-    default java.util.concurrent.CompletableFuture<Void> onCallSignalAsync(String from, String target, String signalType, String callId, java.util.Map<String, String> context)
-    {
-        return _iceI_onCallSignalAsync(from, target, signalType, callId, context, false);
-    }
-
-    /**
-     * @hidden
-     * @param iceP_from -
-     * @param iceP_target -
-     * @param iceP_signalType -
-     * @param iceP_callId -
-     * @param context -
-     * @param sync -
-     * @return -
-     **/
-    default com.zeroc.IceInternal.OutgoingAsync<Void> _iceI_onCallSignalAsync(String iceP_from, String iceP_target, String iceP_signalType, String iceP_callId, java.util.Map<String, String> context, boolean sync)
-    {
-        com.zeroc.IceInternal.OutgoingAsync<Void> f = new com.zeroc.IceInternal.OutgoingAsync<>(this, "onCallSignal", null, sync, null);
-        f.invoke(false, context, null, ostr -> {
-                     ostr.writeString(iceP_from);
-                     ostr.writeString(iceP_target);
-                     ostr.writeString(iceP_signalType);
-                     ostr.writeString(iceP_callId);
-                 }, null);
-        return f;
-    }
-
     /**
      * Contacts the remote server to verify that the object implements this type.
      * Raises a local exception if a communication error occurs.

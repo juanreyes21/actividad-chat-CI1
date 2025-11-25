@@ -4,8 +4,6 @@ import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.sql.ResultSet;
-import java.util.Base64;
-import java.util.UUID;
 import org.json.JSONObject;
 import org.json.JSONArray;
 
@@ -95,29 +93,6 @@ public class ProxyListener implements Runnable {
                 return new JSONObject().put("status","ok");
             }
 
-            case "send_voice": {
-                String sender = req.optString("username", null);
-                String recipient = req.optString("recipient", null);
-                String fileName = req.optString("filename", null);
-                String audioBase64 = req.optString("audio_base64", null);
-                if (sender == null || recipient == null || fileName == null || audioBase64 == null) {
-                    return new JSONObject().put("status","error").put("message","username, recipient, filename and audio_base64 required");
-                }
-
-                boolean isGroup = server.getGroups().containsKey(recipient);
-                byte[] data = Base64.getDecoder().decode(audioBase64);
-                String id = UUID.randomUUID().toString();
-                long ts = System.currentTimeMillis();
-
-                server.handleProxySendVoice(id, sender, recipient, isGroup, data, fileName, ts);
-
-                JSONObject out = new JSONObject();
-                out.put("status", "ok");
-                out.put("id", id);
-                out.put("timestamp", ts);
-                return out;
-            }
-
             case "delete_chat": {
                 String sender = req.optString("username", null);
                 String recipient = req.optString("recipient", null);
@@ -150,22 +125,6 @@ public class ProxyListener implements Runnable {
                     }
                 } catch (Exception e) { e.printStackTrace(); }
                 return new JSONObject().put("status","ok").put("messages", arr);
-            }
-
-            case "get_audio_path": {
-                String id = req.optString("id", null);
-                if (id == null) {
-                    return new JSONObject().put("status","error").put("message","id required");
-                }
-                String path = server.getAudioPathForId(id);
-                if (path == null) {
-                    return new JSONObject().put("status","error").put("message","audio not found");
-                }
-                JSONObject out = new JSONObject();
-                out.put("status", "ok");
-                out.put("file_path", path);
-                out.put("mime_type", "audio/webm");
-                return out;
             }
 
             case "list_groups": {

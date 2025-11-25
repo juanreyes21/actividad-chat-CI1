@@ -23,8 +23,6 @@ public interface ClientCallback extends com.zeroc.Ice.Object
 
     void onUserLeft(String username, com.zeroc.Ice.Current current);
 
-    void onCallSignal(String from, String target, String signalType, String callId, com.zeroc.Ice.Current current);
-
     /** @hidden */
     static final String[] _iceIds =
     {
@@ -103,30 +101,6 @@ public interface ClientCallback extends com.zeroc.Ice.Object
         return inS.setResult(inS.writeEmptyParams());
     }
 
-    /**
-     * @hidden
-     * @param obj -
-     * @param inS -
-     * @param current -
-     * @return -
-    **/
-    static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_onCallSignal(ClientCallback obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
-    {
-        com.zeroc.Ice.Object._iceCheckMode(null, current.mode);
-        com.zeroc.Ice.InputStream istr = inS.startReadParams();
-        String iceP_from;
-        String iceP_target;
-        String iceP_signalType;
-        String iceP_callId;
-        iceP_from = istr.readString();
-        iceP_target = istr.readString();
-        iceP_signalType = istr.readString();
-        iceP_callId = istr.readString();
-        inS.endReadParams();
-        obj.onCallSignal(iceP_from, iceP_target, iceP_signalType, iceP_callId, current);
-        return inS.setResult(inS.writeEmptyParams());
-    }
-
     /** @hidden */
     final static String[] _iceOps =
     {
@@ -134,7 +108,6 @@ public interface ClientCallback extends com.zeroc.Ice.Object
         "ice_ids",
         "ice_isA",
         "ice_ping",
-        "onCallSignal",
         "onNewMessage",
         "onUserJoined",
         "onUserLeft"
@@ -171,17 +144,13 @@ public interface ClientCallback extends com.zeroc.Ice.Object
             }
             case 4:
             {
-                return _iceD_onCallSignal(this, in, current);
+                return _iceD_onNewMessage(this, in, current);
             }
             case 5:
             {
-                return _iceD_onNewMessage(this, in, current);
-            }
-            case 6:
-            {
                 return _iceD_onUserJoined(this, in, current);
             }
-            case 7:
+            case 6:
             {
                 return _iceD_onUserLeft(this, in, current);
             }
