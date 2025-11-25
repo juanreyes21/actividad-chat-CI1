@@ -218,6 +218,93 @@ public class HistoryManager {
         }
     }
 
+    public synchronized String saveVoiceNoteWithVisibility(String id, String sender, String recipient, boolean isGroup, byte[] content, String originalFileName, long timestamp) {
+        String filePath;
+        try {
+            String safeName = Instant.ofEpochMilli(timestamp).toString().replace(":", "-") + "_" + originalFileName;
+            File outFile = new File(AUDIO_DIR, safeName);
+            try (FileOutputStream fos = new FileOutputStream(outFile)) {
+                fos.write(content);
+            }
+            filePath = outFile.getAbsolutePath();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return null;
+        }
+
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO messages (id,type,sender,recipient,is_group,text_content,file_path,timestamp) VALUES (?,?,?,?,?,?,?,?)")) {
+            ps.setString(1, id);
+            ps.setString(2, "VOICE_NOTE");
+            ps.setString(3, sender);
+            ps.setString(4, recipient);
+            ps.setInt(5, isGroup ? 1 : 0);
+            ps.setString(6, null);
+            ps.setString(7, filePath);
+            ps.setLong(8, timestamp);
+            ps.executeUpdate();
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            return null;
+        }
+
+        try {
+            try (PreparedStatement pv = conn.prepareStatement(
+                    "INSERT INTO message_visibility (message_id, username, visible) VALUES (?, ?, 1)")) {
+                pv.setString(1, id);
+                pv.setString(2, sender);
+                pv.executeUpdate();
+            }
+
+            if (isGroup) {
+                try (PreparedStatement gm = conn.prepareStatement(
+                        "SELECT username FROM group_members WHERE group_name = ?")) {
+                    gm.setString(1, recipient);
+                    try (ResultSet rs = gm.executeQuery()) {
+                        try (PreparedStatement pvGroup = conn.prepareStatement(
+                                "INSERT INTO message_visibility (message_id, username, visible) VALUES (?, ?, 1)")) {
+                            while (rs.next()) {
+                                String member = rs.getString("username");
+                                if (!member.equals(sender)) {
+                                    pvGroup.setString(1, id);
+                                    pvGroup.setString(2, member);
+                                    pvGroup.executeUpdate();
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                try (PreparedStatement pvDirect = conn.prepareStatement(
+                        "INSERT INTO message_visibility (message_id, username, visible) VALUES (?, ?, 1)")) {
+                    pvDirect.setString(1, id);
+                    pvDirect.setString(2, recipient);
+                    pvDirect.executeUpdate();
+                }
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            return null;
+        }
+
+        return filePath;
+    }
+
+    public String getAudioPathById(String id) {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT file_path FROM messages WHERE id = ? AND type = 'VOICE_NOTE'")) {
+            ps.setString(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("file_path");
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
     public boolean isGroup(String name) {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT COUNT(*) FROM groups WHERE group_name = ?")) {

@@ -54,6 +54,66 @@ public class IceChatService implements Service {
         return new Msg[0];
     }
 
+    @Override
+    public void startCall(String caller, String target, String callId, Current current) {
+        System.out.println("[ICE] startCall: " + caller + " -> " + target + " (" + callId + ")");
+
+        ClientCallbackPrx targetCb = clients.get(target);
+        if (targetCb != null) {
+            try {
+                targetCb.onCallSignal(caller, target, "CALL_START", callId);
+            } catch (Exception e) {
+                System.err.println("[ICE] Error notify CALL_START: " + e.getMessage());
+            }
+        }
+    }
+
+    @Override
+    public void acceptCall(String caller, String target, String callId, Current current) {
+        System.out.println("[ICE] acceptCall: " + caller + " <-> " + target + " (" + callId + ")");
+
+        ClientCallbackPrx targetCb = clients.get(target);
+        if (targetCb != null) {
+            try {
+                targetCb.onCallSignal(caller, target, "CALL_ACCEPT", callId);
+            } catch (Exception e) {
+                System.err.println("[ICE] Error notify CALL_ACCEPT to target: " + e.getMessage());
+            }
+        }
+
+        ClientCallbackPrx callerCb = clients.get(caller);
+        if (callerCb != null) {
+            try {
+                callerCb.onCallSignal(caller, target, "CALL_ACCEPT", callId);
+            } catch (Exception e) {
+                System.err.println("[ICE] Error notify CALL_ACCEPT to caller: " + e.getMessage());
+            }
+        }
+    }
+
+    @Override
+    public void endCall(String caller, String target, String callId, Current current) {
+        System.out.println("[ICE] endCall: " + caller + " <-> " + target + " (" + callId + ")");
+
+        ClientCallbackPrx targetCb = clients.get(target);
+        if (targetCb != null) {
+            try {
+                targetCb.onCallSignal(caller, target, "CALL_END", callId);
+            } catch (Exception e) {
+                System.err.println("[ICE] Error notify CALL_END to target: " + e.getMessage());
+            }
+        }
+
+        ClientCallbackPrx callerCb = clients.get(caller);
+        if (callerCb != null) {
+            try {
+                callerCb.onCallSignal(caller, target, "CALL_END", callId);
+            } catch (Exception e) {
+                System.err.println("[ICE] Error notify CALL_END to caller: " + e.getMessage());
+            }
+        }
+    }
+
     // ---------------------------
     // Métodos auxiliares internos
     // ---------------------------
