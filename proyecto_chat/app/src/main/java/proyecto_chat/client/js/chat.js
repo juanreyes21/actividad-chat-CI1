@@ -5,6 +5,10 @@ let mediaRecorder = null;
 let audioChunks = [];
 let audioSocket = null;
 
+let currentPeerConnection = null;
+let localStream = null;
+let currentCallPeer = null;
+
 // =========================
 // Integración ICE (WebSocket)
 // =========================
@@ -17,6 +21,18 @@ async function initIce(username) {
         // Ya está inicializado
         return;
     }
+
+async function pollCallEnd() {
+    if (!username || !currentPeerConnection) return;
+    try {
+        const r = await api('/api/call/end/' + encodeURIComponent(username));
+        if (r.status === 'ok' && r.ended) {
+            endCurrentCall();
+        }
+    } catch (e) {
+        console.error('Error comprobando fin de llamada:', e);
+    }
+}
 
     try {
         // Inicializar Ice en el navegador
@@ -86,7 +102,202 @@ async function initIce(username) {
     }
 }
 
+async function startWebRtcAsCaller() {
+    try {
+        if (!currentCallPeer) return;
 
+        const pc = new RTCPeerConnection({
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        });
+        currentPeerConnection = pc;
+
+        pc.onicecandidate = async (event) => {
+            if (event.candidate) {
+                try {
+                    await api('/api/call/candidate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ to: currentCallPeer, candidate: event.candidate })
+                    });
+                } catch (e) {
+                    console.error('Error enviando candidate:', e);
+                }
+            }
+        };
+
+function endCurrentCall() {
+    currentCallPeer = null;
+    try {
+        if (currentPeerConnection) {
+            currentPeerConnection.close();
+        }
+    } catch (e) {
+        console.error('Error cerrando RTCPeerConnection:', e);
+    }
+    currentPeerConnection = null;
+
+    if (localStream) {
+        try {
+            localStream.getTracks().forEach(t => t.stop());
+        } catch (e) {
+            console.error('Error parando localStream:', e);
+        }
+    }
+    localStream = null;
+
+    const remoteAudio = document.getElementById('remoteAudio');
+    if (remoteAudio) {
+        remoteAudio.srcObject = null;
+    }
+
+    const hangBtn = document.getElementById('hangupBtn');
+    if (hangBtn) hangBtn.disabled = true;
+}
+
+document.getElementById('hangupBtn').onclick = () => {
+    const peer = currentCallPeer;
+    endCurrentCall();
+    if (peer) {
+        api('/api/call/end', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to: peer })
+        }).catch(e => console.error('Error notificando fin de llamada:', e));
+    }
+};
+
+        pc.ontrack = (event) => {
+            const remoteAudio = document.getElementById('remoteAudio') || createRemoteAudioElement();
+            remoteAudio.srcObject = event.streams[0];
+        };
+
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        const payload = JSON.stringify({
+            type: 'offer',
+            sdp: offer.sdp,
+            from: username,
+            to: currentCallPeer
+        });
+
+        await api('/api/call/offer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to: currentCallPeer, payload })
+        });
+    } catch (e) {
+        console.error('Error iniciando WebRTC (caller):', e);
+    }
+}
+
+async function startWebRtcAsCallee() {
+    try {
+        if (!currentCallPeer) return;
+
+        const pc = new RTCPeerConnection({
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        });
+        currentPeerConnection = pc;
+
+        pc.onicecandidate = async (event) => {
+            if (event.candidate) {
+                try {
+                    await api('/api/call/candidate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ to: currentCallPeer, candidate: event.candidate })
+                    });
+                } catch (e) {
+                    console.error('Error enviando candidate:', e);
+                }
+            }
+        };
+
+        pc.ontrack = (event) => {
+            const remoteAudio = document.getElementById('remoteAudio') || createRemoteAudioElement();
+            remoteAudio.srcObject = event.streams[0];
+        };
+
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+        // Obtener offer pendiente para este usuario
+        const r = await api('/api/call/offer/' + encodeURIComponent(username));
+        if (r.status !== 'ok' || !r.has) {
+            console.warn('No hay offer pendiente para este usuario');
+            return;
+        }
+        const payload = JSON.parse(r.payload);
+        const remoteDesc = new RTCSessionDescription({ type: 'offer', sdp: payload.sdp });
+        await pc.setRemoteDescription(remoteDesc);
+
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+
+        const answerPayload = JSON.stringify({
+            type: 'answer',
+            sdp: answer.sdp,
+            from: username,
+            to: currentCallPeer
+        });
+
+        await api('/api/call/answer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to: currentCallPeer, payload: answerPayload })
+        });
+    } catch (e) {
+        console.error('Error iniciando WebRTC (callee):', e);
+    }
+}
+
+async function pollWebRtcAnswerAndCandidates() {
+    if (!username || !currentCallPeer || !currentPeerConnection) return;
+    try {
+        // El caller busca answer
+        const rAns = await api('/api/call/answer/' + encodeURIComponent(username));
+        if (rAns.status === 'ok' && rAns.has) {
+            const payload = JSON.parse(rAns.payload);
+            const remoteDesc = new RTCSessionDescription({ type: 'answer', sdp: payload.sdp });
+            if (!currentPeerConnection.currentRemoteDescription) {
+                await currentPeerConnection.setRemoteDescription(remoteDesc);
+            }
+        }
+
+        // Ambos obtienen candidates
+        const rCand = await api('/api/call/candidates/' + encodeURIComponent(username));
+        if (rCand.status === 'ok' && Array.isArray(rCand.candidates)) {
+            for (const c of rCand.candidates) {
+                try {
+                    const obj = JSON.parse(c);
+                    // Evitar InvalidStateError: solo aplicar candidates si ya hay remoteDescription
+                    if (!currentPeerConnection.remoteDescription || !currentPeerConnection.remoteDescription.type) {
+                        continue;
+                    }
+                    await currentPeerConnection.addIceCandidate(new RTCIceCandidate(obj));
+                } catch (e) {
+                    console.error('Error aplicando candidate:', e);
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Error en pollWebRtcAnswerAndCandidates:', e);
+    }
+}
+
+
+function createRemoteAudioElement() {
+    const audio = document.createElement('audio');
+    audio.id = 'remoteAudio';
+    audio.autoplay = true;
+    audio.style.display = 'none';
+    document.body.appendChild(audio);
+    return audio;
+}
 // Estado para refresco/scroll incremental
 const RENDERED_KEYS = new Set();   // evita duplicados
 let autoRefresh = true;            // solo refresca si el usuario está al fondo
@@ -193,6 +404,8 @@ async function openChat(chat) {
     document.getElementById("text").disabled = false;
     document.getElementById("send").disabled = false;
     document.getElementById("recordVoice").disabled = false;
+    document.getElementById("callBtn").disabled = false;
+    document.getElementById("hangupBtn").disabled = true;
 
     const box = document.getElementById('messages');
     box.innerHTML = '';
@@ -221,6 +434,8 @@ document.getElementById("deleteChatBtn").onclick = async () => {
     document.getElementById("text").disabled = true;
     document.getElementById("send").disabled = true;
     document.getElementById("recordVoice").disabled = true;
+    document.getElementById("callBtn").disabled = true;
+    document.getElementById("hangupBtn").disabled = true;
     RENDERED_KEYS.clear();
 };
 
@@ -347,6 +562,58 @@ document.getElementById('text').onkeypress = (e) => {
     if (e.key === 'Enter') document.getElementById('send').click();
 };
 
+// --- Señalización básica de llamadas ---
+document.getElementById('callBtn').onclick = async () => {
+    if (!activeChat) {
+        alert('Selecciona un chat primero.');
+        return;
+    }
+    if (!username) {
+        alert('Inicia sesión primero.');
+        return;
+    }
+
+    try {
+        const r = await api('/api/call/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ caller: username, callee: activeChat })
+        });
+        if (r.status === 'ok') {
+            alert(`Llamando a ${capitalize(activeChat)}...`);
+            // Iniciar flujo WebRTC como caller
+            currentCallPeer = activeChat;
+            await startWebRtcAsCaller();
+            document.getElementById('hangupBtn').disabled = false;
+        } else {
+            alert('No se pudo iniciar la llamada.');
+        }
+    } catch (e) {
+        console.error('Error iniciando llamada:', e);
+        alert('Error iniciando llamada.');
+    }
+};
+
+async function checkIncomingCall() {
+    if (!username) return;
+    try {
+        const r = await api('/api/call/status/' + encodeURIComponent(username));
+        if (r.status === 'ok' && r.incoming && r.from) {
+            const fromName = capitalize(r.from);
+            const accept = window.confirm(`${fromName} te está llamando. ¿Aceptar?`);
+            if (accept) {
+                currentCallPeer = r.from;
+                await startWebRtcAsCallee();
+                document.getElementById('hangupBtn').disabled = false;
+            } else {
+                // Por ahora no notificamos rechazo explícito
+            }
+        }
+    } catch (e) {
+        console.error('Error comprobando llamadas entrantes:', e);
+    }
+}
+
 function getAudioWebSocket() {
     if (audioSocket && audioSocket.readyState === WebSocket.OPEN) {
         return audioSocket;
@@ -447,6 +714,9 @@ async function refreshLoop() {
         if (activeChat && autoRefresh) {
             await loadHistoryIncremental(activeChat);
         }
+        await checkIncomingCall();
+        await pollWebRtcAnswerAndCandidates();
+        await pollCallEnd();
     } catch (e) {
 
     } finally {

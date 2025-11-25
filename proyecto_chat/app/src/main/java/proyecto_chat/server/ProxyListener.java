@@ -158,6 +158,134 @@ public class ProxyListener implements Runnable {
             }
 
 
+            case "call_start": {
+                String caller = req.optString("caller", null);
+                String callee = req.optString("callee", null);
+                if (caller == null || callee == null) {
+                    return new JSONObject().put("status","error").put("message","caller and callee required");
+                }
+                server.registerIncomingCall(caller, callee);
+                return new JSONObject().put("status","ok");
+            }
+
+            case "call_status": {
+                String username = req.optString("username", null);
+                if (username == null) {
+                    return new JSONObject().put("status","error").put("message","username required");
+                }
+                String from = server.consumeIncomingCall(username);
+                JSONObject out = new JSONObject();
+                out.put("status", "ok");
+                if (from != null) {
+                    out.put("incoming", true);
+                    out.put("from", from);
+                } else {
+                    out.put("incoming", false);
+                }
+                return out;
+            }
+
+
+            case "call_offer": {
+                String to = req.optString("to", null);
+                String payload = req.optString("payload", null);
+                if (to == null || payload == null) {
+                    return new JSONObject().put("status","error").put("message","to and payload required");
+                }
+                server.registerOfferForUser(to, payload);
+                return new JSONObject().put("status","ok");
+            }
+
+            case "call_answer": {
+                String to = req.optString("to", null);
+                String payload = req.optString("payload", null);
+                if (to == null || payload == null) {
+                    return new JSONObject().put("status","error").put("message","to and payload required");
+                }
+                server.registerAnswerForUser(to, payload);
+                return new JSONObject().put("status","ok");
+            }
+
+            case "call_candidate": {
+                String to = req.optString("to", null);
+                String candidate = req.optString("candidate", null);
+                if (to == null || candidate == null) {
+                    return new JSONObject().put("status","error").put("message","to and candidate required");
+                }
+                server.registerCandidateForUser(to, candidate);
+                return new JSONObject().put("status","ok");
+            }
+
+            case "call_poll_offer": {
+                String username = req.optString("username", null);
+                if (username == null) {
+                    return new JSONObject().put("status","error").put("message","username required");
+                }
+                String offer = server.consumeOfferForUser(username);
+                JSONObject out = new JSONObject();
+                out.put("status", "ok");
+                if (offer != null) {
+                    out.put("has", true);
+                    out.put("payload", offer);
+                } else {
+                    out.put("has", false);
+                }
+                return out;
+            }
+
+            case "call_poll_answer": {
+                String username = req.optString("username", null);
+                if (username == null) {
+                    return new JSONObject().put("status","error").put("message","username required");
+                }
+                String answer = server.consumeAnswerForUser(username);
+                JSONObject out = new JSONObject();
+                out.put("status", "ok");
+                if (answer != null) {
+                    out.put("has", true);
+                    out.put("payload", answer);
+                } else {
+                    out.put("has", false);
+                }
+                return out;
+            }
+
+            case "call_poll_candidates": {
+                String username = req.optString("username", null);
+                if (username == null) {
+                    return new JSONObject().put("status","error").put("message","username required");
+                }
+                java.util.List<String> list = server.consumeCandidatesForUser(username);
+                JSONObject out = new JSONObject();
+                out.put("status", "ok");
+                JSONArray arr = new JSONArray();
+                for (String c : list) arr.put(c);
+                out.put("candidates", arr);
+                return out;
+            }
+
+            case "call_end_notify": {
+                String to = req.optString("to", null);
+                if (to == null) {
+                    return new JSONObject().put("status","error").put("message","to required");
+                }
+                server.registerCallEndForUser(to);
+                return new JSONObject().put("status","ok");
+            }
+
+            case "call_poll_end": {
+                String username = req.optString("username", null);
+                if (username == null) {
+                    return new JSONObject().put("status","error").put("message","username required");
+                }
+                boolean ended = server.consumeCallEndForUser(username);
+                JSONObject out = new JSONObject();
+                out.put("status", "ok");
+                out.put("ended", ended);
+                return out;
+            }
+
+
             case "send_voice": {
                 String sender = req.optString("username", null);
                 String recipient = req.optString("recipient", null);

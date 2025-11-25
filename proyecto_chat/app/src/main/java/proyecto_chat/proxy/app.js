@@ -101,6 +101,126 @@ app.get('/api/groups/:username', async (req,res)=>{
   } catch(e){res.json({status:'error'});}
 });
 
+// --- Señalización básica de llamadas para cliente web ---
+app.post('/api/call/start', async (req, res) => {
+  const { caller, callee } = req.body;
+  if (!caller || !callee) {
+    return res.status(400).json({ status: 'error', message: 'caller and callee required' });
+  }
+  try {
+    const r = await sendToJavaProxy({ action: 'call_start', caller, callee });
+    res.json(r);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+app.get('/api/call/status/:username', async (req, res) => {
+  const username = req.params.username;
+  if (!username) {
+    return res.status(400).json({ status: 'error', message: 'username required' });
+  }
+  try {
+    const r = await sendToJavaProxy({ action: 'call_status', username });
+    res.json(r);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+// --- Señalización WebRTC ---
+app.post('/api/call/offer', async (req, res) => {
+  const { to, payload } = req.body;
+  if (!to || !payload) {
+    return res.status(400).json({ status: 'error', message: 'to and payload required' });
+  }
+  try {
+    const r = await sendToJavaProxy({ action: 'call_offer', to, payload });
+    res.json(r);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+app.post('/api/call/answer', async (req, res) => {
+  const { to, payload } = req.body;
+  if (!to || !payload) {
+    return res.status(400).json({ status: 'error', message: 'to and payload required' });
+  }
+  try {
+    const r = await sendToJavaProxy({ action: 'call_answer', to, payload });
+    res.json(r);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+app.post('/api/call/candidate', async (req, res) => {
+  const { to, candidate } = req.body;
+  if (!to || !candidate) {
+    return res.status(400).json({ status: 'error', message: 'to and candidate required' });
+  }
+  try {
+    const r = await sendToJavaProxy({ action: 'call_candidate', to, candidate: JSON.stringify(candidate) });
+    res.json(r);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+app.get('/api/call/offer/:username', async (req, res) => {
+  const username = req.params.username;
+  try {
+    const r = await sendToJavaProxy({ action: 'call_poll_offer', username });
+    res.json(r);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+app.get('/api/call/answer/:username', async (req, res) => {
+  const username = req.params.username;
+  try {
+    const r = await sendToJavaProxy({ action: 'call_poll_answer', username });
+    res.json(r);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+app.get('/api/call/candidates/:username', async (req, res) => {
+  const username = req.params.username;
+  try {
+    const r = await sendToJavaProxy({ action: 'call_poll_candidates', username });
+    res.json(r);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+app.post('/api/call/end', async (req, res) => {
+  const { to } = req.body;
+  if (!to) {
+    return res.status(400).json({ status: 'error', message: 'to required' });
+  }
+  try {
+    const r = await sendToJavaProxy({ action: 'call_end_notify', to });
+    res.json(r);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+app.get('/api/call/end/:username', async (req, res) => {
+  const username = req.params.username;
+  try {
+    const r = await sendToJavaProxy({ action: 'call_poll_end', username });
+    res.json(r);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
 
 // Endpoint para servir archivos de audio por id de mensaje
 app.get('/api/audio/:id', async (req, res) => {
