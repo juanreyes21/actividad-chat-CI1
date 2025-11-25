@@ -80,7 +80,8 @@
     {
         "onNewMessage": [, , , , , [[Chat.Msg]], , , , ],
         "onUserJoined": [, , , , , [[7]], , , , ],
-        "onUserLeft": [, , , , , [[7]], , , , ]
+        "onUserLeft": [, , , , , [[7]], , , , ],
+        "onCallSignal": [, , , , , [[7], [7], [7], [7]], , , , ]
     });
 
     const iceC_Chat_Service_ids = [
@@ -102,7 +103,10 @@
         "sendText": [, , , , , [[7], [7], [7]], , , , ],
         "createGroup": [, , , , , [[7], [7]], , , , ],
         "joinGroup": [, , , , , [[7], [7]], , , , ],
-        "getHistory": [, , , , ["Chat.MsgSeqHelper"], [[7], [3]], , , , ]
+        "getHistory": [, , , , ["Chat.MsgSeqHelper"], [[7], [3]], , , , ],
+        "startCall": [, , , , , [[7], [7], [7]], , , , ],
+        "acceptCall": [, , , , , [[7], [7], [7]], , , , ],
+        "endCall": [, , , , , [[7], [7], [7]], , , , ]
     });
     exports.Chat = Chat;
 }
