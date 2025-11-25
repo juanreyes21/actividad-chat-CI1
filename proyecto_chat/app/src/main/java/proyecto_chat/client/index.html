@@ -49,31 +49,20 @@
         <main class="chat-area">
             <div class="chat-header">
                 <span id="activeChatName">Selecciona un chat</span>
-                <div class="call-controls">
-                    <button id="callBtn" disabled>📞</button>
-                    <button id="hangupBtn" disabled style="display:none;">📴</button>
-                </div>
-            </div>
-
-            <div id="incomingCallBar" class="incoming-call-bar" style="display:none;">
-                <span id="incomingCallText"></span>
-                <button id="acceptCallBtn">Aceptar</button>
-                <button id="rejectCallBtn">Rechazar</button>
             </div>
 
             <div id="messages" class="messages"></div>
 
             <div class="send-box">
-                <button id="recordVoiceBtn" disabled>🎙</button>
+                <button id="recordVoice" disabled>🎙</button>
                 <input id="text" placeholder="Escribe un mensaje..." disabled>
                 <button id="send" disabled>Enviar</button>
             </div>
         </main>
     </div>
 
-        <!-- Runtime de Ice para navegador (CDN oficial) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ice/3.7.10/Ice.min.js"></script>
-    <script src="ice/Chat.js"></script>    <!-- stubs generados por slice2js -->
+    <script src="ice/Ice.js"></script>     <!-- runtime de Ice -->
+    <script src="ice/Chat.js"></script>    <!-- stubs generados -->
     <script src="js/chat.js"></script>     <!-- tu lógica -->
 
 

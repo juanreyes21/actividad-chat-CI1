@@ -1,70 +1,16 @@
 let username = null;
 let activeChat = null;
 
+let mediaRecorder = null;
+let audioChunks = [];
+let audioSocket = null;
+
 // =========================
 // Integración ICE (WebSocket)
 // =========================
 let iceCommunicator = null;
 let iceService = null;
 let iceAdapter = null;
-
-// WebSocket para notas de voz
-let voiceSocket = null;
-let mediaRecorder = null;
-let audioChunks = [];
-
-// Estado de llamada
-let currentCallId = null;
-let currentCallTarget = null;
-let inCall = false;
-
-// Canal WebSocket para audio de llamada (solo canal, aún sin procesamiento de audio)
-let callAudioSocket = null;
-
-async function openCallAudioChannel() {
-    if (!currentCallId || !username) return;
-    if (callAudioSocket && callAudioSocket.readyState === WebSocket.OPEN) return;
-
-    try {
-        const url = `ws://${location.host}/call-audio?callId=${encodeURIComponent(currentCallId)}&user=${encodeURIComponent(username)}`;
-        const ws = new WebSocket(url);
-
-        ws.onopen = () => {
-            console.log('[CALL-AUDIO] WebSocket abierto para callId', currentCallId);
-        };
-
-        ws.onmessage = (evt) => {
-            // Más adelante aquí procesaremos el audio entrante
-            console.log('[CALL-AUDIO] Paquete recibido (tamaño bytes):', evt.data?.byteLength ?? 'n/a');
-        };
-
-        ws.onclose = () => {
-            console.log('[CALL-AUDIO] WebSocket cerrado para callId', currentCallId);
-            if (callAudioSocket === ws) {
-                callAudioSocket = null;
-            }
-        };
-
-        ws.onerror = (e) => {
-            console.error('[CALL-AUDIO] Error en WebSocket:', e);
-        };
-
-        callAudioSocket = ws;
-    } catch (e) {
-        console.error('[CALL-AUDIO] No se pudo abrir el canal de audio:', e);
-    }
-}
-
-function closeCallAudioChannel() {
-    if (callAudioSocket) {
-        try {
-            callAudioSocket.close();
-        } catch (_) {
-            // ignorar
-        }
-        callAudioSocket = null;
-    }
-}
 
 async function initIce(username) {
     if (iceService) {
@@ -109,62 +55,6 @@ async function initIce(username) {
                     } catch (e) {
                         console.error("[ICE] Error refrescando historial:", e);
                     }
-                }
-            }
-
-            async onCallSignal(from, target, signalType, callId, current) {
-                console.log('[ICE] onCallSignal', { from, target, signalType, callId });
-
-                const me = (username || '').toLowerCase();
-                const fromL = (from || '').toLowerCase();
-                const targetL = (target || '').toLowerCase();
-
-                // Ignorar si no me concierne
-                if (me !== fromL && me !== targetL) return;
-
-                const callBtn = document.getElementById('callBtn');
-                const hangupBtn = document.getElementById('hangupBtn');
-                const bar = document.getElementById('incomingCallBar');
-                const barText = document.getElementById('incomingCallText');
-
-                if (signalType === 'CALL_START') {
-                    // Llamada entrante: from -> target (yo soy target)
-                    if (me === targetL) {
-                        currentCallId = callId;
-                        currentCallTarget = from;
-                        if (bar && barText) {
-                            barText.textContent = `${capitalize(from)} te está llamando...`;
-                            bar.style.display = 'flex';
-                        }
-                    }
-                } else if (signalType === 'CALL_ACCEPT') {
-                    // Ambos lados pasan a estado en llamada
-                    inCall = true;
-                    currentCallId = callId;
-                    currentCallTarget = me === fromL ? target : from;
-                    if (bar) bar.style.display = 'none';
-                    if (callBtn && hangupBtn) {
-                        callBtn.disabled = true;
-                        callBtn.style.display = 'none';
-                        hangupBtn.disabled = false;
-                        hangupBtn.style.display = 'inline-block';
-                    }
-                    // Abrir canal WS para audio de llamada
-                    openCallAudioChannel().catch(e => console.error(e));
-                } else if (signalType === 'CALL_END') {
-                    // Fin de llamada
-                    inCall = false;
-                    currentCallId = null;
-                    currentCallTarget = null;
-                    if (bar) bar.style.display = 'none';
-                    if (callBtn && hangupBtn) {
-                        callBtn.disabled = !activeChat;
-                        callBtn.style.display = 'inline-block';
-                        hangupBtn.disabled = true;
-                        hangupBtn.style.display = 'none';
-                    }
-                    // Cerrar canal WS de audio
-                    closeCallAudioChannel();
                 }
             }
 
@@ -262,8 +152,6 @@ document.getElementById("logoutBtn").onclick = () => {
 
 if (localStorage.username) {
     username = localStorage.username;
-    // También conectar a ICE en caso de auto-login
-    initIce(username);
     showApp();
     document.getElementById("welcomeUser").textContent = capitalize(username);
 } else {
@@ -304,17 +192,7 @@ async function openChat(chat) {
     document.getElementById("activeChatName").textContent = capitalize(chat);
     document.getElementById("text").disabled = false;
     document.getElementById("send").disabled = false;
-    const rv = document.getElementById("recordVoiceBtn");
-    if (rv) rv.disabled = false;
-    const callBtn = document.getElementById('callBtn');
-    const hangupBtn = document.getElementById('hangupBtn');
-    if (callBtn && !inCall) {
-        callBtn.disabled = false;
-    }
-    if (hangupBtn && !inCall) {
-        hangupBtn.disabled = true;
-        hangupBtn.style.display = 'none';
-    }
+    document.getElementById("recordVoice").disabled = false;
 
     const box = document.getElementById('messages');
     box.innerHTML = '';
@@ -342,17 +220,7 @@ document.getElementById("deleteChatBtn").onclick = async () => {
     document.getElementById("messages").innerHTML = "";
     document.getElementById("text").disabled = true;
     document.getElementById("send").disabled = true;
-    const rv = document.getElementById("recordVoiceBtn");
-    if (rv) rv.disabled = true;
-    const callBtn = document.getElementById('callBtn');
-    const hangupBtn = document.getElementById('hangupBtn');
-    if (callBtn) {
-        callBtn.disabled = true;
-    }
-    if (hangupBtn) {
-        hangupBtn.disabled = true;
-        hangupBtn.style.display = 'none';
-    }
+    document.getElementById("recordVoice").disabled = true;
     RENDERED_KEYS.clear();
 };
 
@@ -369,7 +237,7 @@ async function loadHistoryIncremental(recipient, forceScrollBottom = false) {
     let appended = 0;
 
     r.messages.forEach(m => {
-        const key = `${m.timestamp}|${(m.sender || '').toLowerCase()}|${m.text_content || ''}|${m.type || ''}|${m.id || ''}`;
+        const key = `${m.id || ''}|${m.timestamp}|${(m.sender || '').toLowerCase()}|${m.text_content || ''}|${m.type || ''}`;
         if (RENDERED_KEYS.has(key)) return;
 
         RENDERED_KEYS.add(key);
@@ -386,11 +254,10 @@ async function loadHistoryIncremental(recipient, forceScrollBottom = false) {
             minute: '2-digit'
         });
 
-        if ((m.type || 'TEXT') === 'VOICE_NOTE') {
-            const audioUrl = `/api/audio/${encodeURIComponent(m.id)}`;
+        if ((m.type || '').toUpperCase() === 'VOICE_NOTE') {
             d.innerHTML = `
                 <div class="meta">${capitalize(m.sender)} • ${time}</div>
-                <audio controls src="${audioUrl}" style="max-width: 100%;"></audio>
+                <audio controls src="/api/audio/${encodeURIComponent(m.id)}"></audio>
             `;
         } else {
             d.innerHTML = `
@@ -480,157 +347,69 @@ document.getElementById('text').onkeypress = (e) => {
     if (e.key === 'Enter') document.getElementById('send').click();
 };
 
-// -----------------------------
-// Señalización de llamadas (sin audio todavía)
-// -----------------------------
-
-async function startCallFromUi() {
-    if (!iceService || !activeChat || !username) return;
-    if (inCall) return;
-
-    const callId = crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString() + Math.random().toString(16).slice(2));
-    currentCallId = callId;
-    currentCallTarget = activeChat;
-
-    try {
-        await iceService.startCall(username, activeChat, callId);
-    } catch (e) {
-        console.error('[ICE] Error startCall:', e);
-        currentCallId = null;
-        currentCallTarget = null;
+function getAudioWebSocket() {
+    if (audioSocket && audioSocket.readyState === WebSocket.OPEN) {
+        return audioSocket;
     }
+    audioSocket = new WebSocket('ws://localhost:3000/audio');
+    return audioSocket;
 }
 
-async function acceptIncomingCall() {
-    if (!iceService || !currentCallId || !currentCallTarget || !username) return;
-    try {
-        await iceService.acceptCall(username, currentCallTarget, currentCallId);
-        const bar = document.getElementById('incomingCallBar');
-        if (bar) bar.style.display = 'none';
-    } catch (e) {
-        console.error('[ICE] Error acceptCall:', e);
-    }
-}
-
-async function rejectOrEndCall() {
-    if (!iceService || !currentCallId || !currentCallTarget || !username) return;
-    try {
-        await iceService.endCall(username, currentCallTarget, currentCallId);
-    } catch (e) {
-        console.error('[ICE] Error endCall:', e);
-    }
-    // Cerrar también el canal de audio localmente
-    closeCallAudioChannel();
-}
-
-document.getElementById('callBtn')?.addEventListener('click', () => {
-    startCallFromUi().catch(e => console.error(e));
-});
-
-document.getElementById('hangupBtn')?.addEventListener('click', () => {
-    rejectOrEndCall().catch(e => console.error(e));
-});
-
-document.getElementById('acceptCallBtn')?.addEventListener('click', () => {
-    acceptIncomingCall().catch(e => console.error(e));
-});
-
-document.getElementById('rejectCallBtn')?.addEventListener('click', () => {
-    rejectOrEndCall().catch(e => console.error(e));
-    const bar = document.getElementById('incomingCallBar');
-    if (bar) bar.style.display = 'none';
-});
-
-// -----------------------------
-// Notas de voz: MediaRecorder + WS
-// -----------------------------
-
-async function ensureVoiceSocket() {
-    if (voiceSocket && voiceSocket.readyState === WebSocket.OPEN) return voiceSocket;
-
-    return new Promise((resolve, reject) => {
-        const ws = new WebSocket(`ws://${location.host}/voice`);
-        ws.onopen = () => {
-            voiceSocket = ws;
-            resolve(ws);
-        };
-        ws.onerror = (e) => {
-            reject(e);
-        };
-    });
-}
-
-async function startRecording() {
-    if (!activeChat || !username) {
+document.getElementById('recordVoice').onclick = async () => {
+    if (!activeChat) {
         alert('Selecciona un chat primero.');
         return;
     }
 
-    const rv = document.getElementById('recordVoiceBtn');
-    if (rv) rv.textContent = '⏹';
+    const btn = document.getElementById('recordVoice');
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioChunks = [];
-    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-
-    mediaRecorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) {
-            audioChunks.push(e.data);
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+        } catch (err) {
+            console.error('Error accediendo al micrófono:', err);
+            alert('No se pudo acceder al micrófono.');
+            return;
         }
-    };
 
-    mediaRecorder.onstop = async () => {
-        const blob = new Blob(audioChunks, { type: 'audio/webm' });
-        const arrayBuffer = await blob.arrayBuffer();
-        const ws = await ensureVoiceSocket();
+        audioChunks = [];
+        const ws = getAudioWebSocket();
 
-        const fileName = `note_${Date.now()}.webm`;
+        ws.onopen = () => {
+            ws.send(JSON.stringify({
+                sender: username,
+                recipient: activeChat,
+                fileName: 'note.webm'
+            }));
+        };
 
-        ws.send(JSON.stringify({
-            type: 'VOICE_NOTE',
-            username,
-            recipient: activeChat,
-            filename: fileName
-        }));
-
-        ws.send(arrayBuffer);
-
-        ws.onmessage = async (evt) => {
-            try {
-                const resp = JSON.parse(evt.data);
-                if (resp.status === 'ok') {
-                    await loadHistoryIncremental(activeChat, true);
-                } else {
-                    console.error('Error enviando nota de voz:', resp.message);
-                }
-            } catch (e) {
-                console.error('Respuesta WS no válida:', e);
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) {
+                audioChunks.push(e.data);
             }
         };
 
-        if (rv) rv.textContent = '🎙';
-    };
+        mediaRecorder.onstop = async () => {
+            try {
+                const blob = new Blob(audioChunks, { type: 'audio/webm' });
+                const buffer = await blob.arrayBuffer();
+                const ws2 = getAudioWebSocket();
 
-    mediaRecorder.start();
-}
+                ws2.send(new Uint8Array(buffer));
+                ws2.send(JSON.stringify({ done: true }));
+            } catch (err) {
+                console.error('Error enviando nota de voz:', err);
+            }
+        };
 
-function stopRecording() {
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.start();
+        btn.textContent = '■';
+    } else if (mediaRecorder.state === 'recording') {
         mediaRecorder.stop();
+        btn.textContent = '🎙';
     }
-}
-
-document.getElementById('recordVoiceBtn')?.addEventListener('click', () => {
-    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-        startRecording().catch(err => {
-            console.error('No se pudo iniciar la grabación:', err);
-            const rv = document.getElementById('recordVoiceBtn');
-            if (rv) rv.textContent = '🎙';
-        });
-    } else {
-        stopRecording();
-    }
-});
+};
 
 // Crear/Unirse a grupo
 document.getElementById("createGroupBtn").onclick = async () => {

@@ -8,6 +8,7 @@ import java.sql.*;
 import java.util.concurrent.*;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Base64;
 
 public class Server implements Runnable {
     private int port;
@@ -69,50 +70,6 @@ public class Server implements Runnable {
             }
         } catch (Exception e) {
             e.printStackTrace();
-        }
-    }
-
-    public void handleProxySendVoice(String id, String sender, String recipient, boolean isGroup, byte[] content, String fileName, long timestamp) {
-
-        registerUserIfNotExists(sender);
-        if (!isGroup) {
-            registerUserIfNotExists(recipient);
-        }
-
-        String storedPath = historyManager.saveVoiceNoteWithVisibility(id, sender, recipient, isGroup, content, fileName, timestamp);
-
-        if (storedPath == null) {
-            return;
-        }
-
-        if (isGroup && groups.containsKey(recipient)) {
-            for (String member : groups.get(recipient)) {
-                if (!member.equals(sender) && clients.containsKey(member)) {
-                    proyecto_chat.common.Message msg =
-                        new proyecto_chat.common.Message(
-                            proyecto_chat.common.Message.MessageType.VOICE_NOTE,
-                            id,
-                            sender,
-                            recipient,
-                            content,
-                            fileName,
-                            timestamp
-                        );
-                    clients.get(member).sendMessage(msg);
-                }
-            }
-        } else if (!isGroup && clients.containsKey(recipient)) {
-            proyecto_chat.common.Message msg =
-                new proyecto_chat.common.Message(
-                    proyecto_chat.common.Message.MessageType.VOICE_NOTE,
-                    id,
-                    sender,
-                    recipient,
-                    content,
-                    fileName,
-                    timestamp
-                );
-            clients.get(recipient).sendMessage(msg);
         }
     }
 
@@ -264,7 +221,28 @@ public class Server implements Runnable {
         return groups;
     }
 
-    public String getAudioPathForId(String id) {
-        return historyManager.getAudioPathById(id);
+    public void handleProxySendVoice(String sender, String recipient, String fileName, String dataBase64) {
+        try {
+            registerUserIfNotExists(sender);
+            if (!groups.containsKey(recipient)) {
+                registerUserIfNotExists(recipient);
+            }
+
+            byte[] content = Base64.getDecoder().decode(dataBase64);
+            long ts = System.currentTimeMillis();
+            String id = UUID.randomUUID().toString();
+            historyManager.saveVoiceNoteToDiskAndDb(id, sender, recipient, content, fileName, ts);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public String getAudioFilePathByIdFromProxy(String id) {
+        try {
+            return historyManager.getAudioFilePathById(id);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 }
