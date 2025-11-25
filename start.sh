@@ -1,13 +1,11 @@
 #!/bin/bash
 
-echo "Iniciando ICE server..."
-./gradlew :app:runIceServer &
+echo "=== Iniciando servidores ==="
 
-echo "Iniciando Chat server..."
-./gradlew :app:runServer &
+# Inicia servidor Java
+java -jar ./libs/app.jar &
 
-echo "Iniciando proxy Node..."
-cd proxy && npm start &
+# Inicia proxy Node
+node ./proxy/index.js &
 
-# Mantener los procesos vivos
 wait

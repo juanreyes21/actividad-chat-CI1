@@ -1,37 +1,42 @@
-# ----------- STAGE 1: Construcción del proyecto Java con Gradle -----------
+# -------- STAGE 1: Construcción con Gradle --------
 FROM gradle:8.5-jdk17 AS build
-WORKDIR /app
-COPY . .
-RUN gradle build --no-daemon
+WORKDIR /workspace
 
-# ----------- STAGE 2: Instalación del proxy Node.js -----------
+# Copiamos TODO el repo
+COPY . .
+
+# Entramos a la carpeta correcta del proyecto
+WORKDIR /workspace/proyecto_chat
+
+# Construimos el módulo app
+RUN gradle :app:build --no-daemon
+
+# -------- STAGE 2: Construcción Proxy (Node.js) --------
 FROM node:18 AS proxy
 WORKDIR /proxy
+
+# Copiar solo el código del proxy desde tu estructura real
 COPY proyecto_chat/app/src/main/java/proyecto_chat/proxy .
+
 RUN npm install
 
-# ----------- STAGE 3: Imagen final -----------
-
+# -------- STAGE FINAL --------
 FROM eclipse-temurin:17-jre
-
 WORKDIR /app
 
-# Copiar la aplicación Java construida
-COPY --from=build /app .
+# Copiar el JAR generado
+COPY --from=build /workspace/proyecto_chat/app/build/libs ./libs
 
-# Copiar el proxy Node ya instalado
+# Copiar proxy ya instalado
 COPY --from=proxy /proxy ./proxy
 
 # Copiar script de inicio
 COPY start.sh .
 
-# Dar permisos de ejecución
 RUN chmod +x start.sh
 
-# Exponer puertos que usa tu proyecto
 EXPOSE 9090
 EXPOSE 10000
 EXPOSE 3000
 
-# Ejecutar el script que inicia los 3 procesos
 CMD ["bash", "start.sh"]
